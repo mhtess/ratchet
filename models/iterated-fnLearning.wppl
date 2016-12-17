@@ -1,0 +1,52 @@
+var opts = {method: "optimize", samples: 100, steps: 1000,
+            optMethod: {adam: {stepSize: .01}}};
+// var opts = {method: "MCMC", kernel: "HMC", samples: 1000, burn: 500, verbose: true};
+// var opts = {method: "MCMC", samples: 10000, burn: 5000, verbose: true};
+// var opts = {method: "forward", samples: 1000}
+
+var posteriorPrediction = function(dist, x){
+  var params = sample(dist);
+  return T.get(params, 0) + T.get(params, 1) * x;
+};
+
+// hyperparameters taken from KGL (2007) appendix
+var sigma_y = Math.sqrt(0.0025);
+var sigma_b = Math.sqrt(0.005);
+var mu_0 = 0, mu_1 = 1;
+
+var oneGeneration = function(data){
+  return Infer(opts, function(){
+
+    var betas = diagCovGaussian(Vector([mu_0, mu_1]), Vector([sigma_b, sigma_b]))
+    // simple linear regression
+    var obsFn = function(d){
+      var predicted_y = T.get(betas, 0) + T.get(betas, 1)*d.x;
+      observe(Gaussian({mu: predicted_y, sigma: sigma_y}), d.y);
+    };
+    mapData({data}, obsFn)
+
+    return betas
+  })
+};
+
+var passData = function(lastGenerationParameters){
+  return repeat(20, function(){
+    var x = uniform(0, 1);
+    var y = lastGenerationParameters ?
+          posteriorPrediction(lastGenerationParameters, x) :
+          1 - x; // start chain of learners with y = 1 - x function
+    return {x, y}
+  })
+}
+
+var runChain = function(n, data){
+  (n == 0) ?
+    oneGeneration(data) :
+    runChain(n - 1, passData(oneGeneration(data)))
+}
+
+runChain(2, passData())
+
+// oneGeneration(passData())
+
+// passData()
