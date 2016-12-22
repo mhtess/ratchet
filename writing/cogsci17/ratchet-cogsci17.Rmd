@@ -1,5 +1,5 @@
 ---
-title: "Intergenerational learning with language"
+title: "I learned it from them: Intergenerational knowledge transmission using language"
 bibliography: [ratchet.bib, library.bib]
 csl: apa6.csl
 document-params: "10pt, letterpaper"
@@ -102,6 +102,12 @@ For the quadratic functions, we may need to do something compositional in the la
 
 Otherwise, we will want to develop a comparable model for causal or category learning.
 
+
+
+# Language about correlations
+
+
+
 # General Formatting Instructions 
 
 For general information about authoring in markdown, see **[here](http://rmarkdown.rstudio.com/authoring_basics.html).**
@@ -172,6 +178,9 @@ Indicate footnotes with a number\footnote{Sample of the first
 footnote.} in the text. Place the footnotes in 9 point type at the
 bottom of the page on which they appear. Precede the footnote with a
 horizontal rule.\footnote{Sample of the second footnote.}
+<!--
+Footnotes can also be added using markdown syntax^[Here is a footnote.]
+-->
 
 ## Figures
 
@@ -244,10 +253,6 @@ tab1 <- xtable::xtable(summary(out)$coef, digits=c(0, 2, 2, 1, 2),
 print(tab1, type="latex", comment = F, table.placement = "H")
 ```
 
-# Acknowledgements
-
-Place acknowledgments (including funding information) in a section at
-the end of the paper.
 
 # References 
 
