@@ -3,3 +3,29 @@
 	width: 400;
 	margin: 10px;
 }
+/*
+#vertical_slider_table{
+  table-layout: fixed;
+}*/
+
+#svg_bug{
+  width: 200px;
+  max-width: 200px;
+}
+
+#blank{
+  width: 200px;
+  max-width: 200px;
+}
+
+#svg_tree{
+  height: 400px;
+  max-width: 400px;
+}
+
+#vslider0 {
+  float: bottom;
+}
+#slider_col {
+  vertical-align: bottom;
+}
