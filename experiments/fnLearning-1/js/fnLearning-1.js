@@ -1,5 +1,42 @@
+var functionsToLearn = {
+  "y=1-x": function(x){return 1 - x},
+  "y=x" : function(x){ return x},
+  "y=sin(x)": function(x){ return Math.sin(x*Math.PI)}
+};
+
+var makeDataPoint = function(fn){
+  var x = Math.random();
+  var y = fn(x);
+  return {x, y}
+};
+
+var color ="#316C0B";
+
+var bugProps = {
+  "tar1":true,
+  "tar2":false,
+  "prop1":0.3,
+  "prop2":0.1,
+  "col1":{"mean":"#316C0B"},
+  "col2":{"mean":"#316C0B"},
+  "col3":{"mean":"#316C0B"},
+  "col4":{"mean":"#316C0B"},
+  "col5":{"mean":"#316C0B"},
+  "var":0.1
+}
+
+var treeProps =  {
+  "tar1":false,
+  "tar2":false,
+  "prop1":0.02,
+  "prop2":1,
+  "col1":{"mean":color},
+  "col2":{"mean":color},
+  "col3":{"mean":color}
+}
+
 function make_slides(f) {
-  var   slides = {};
+  var slides = {};
 
   slides.i0 = slide({
      name : "i0",
@@ -47,38 +84,19 @@ function make_slides(f) {
 
       $("#sliders_train").append("<td><svg id='svg_bug_train'></svg></td><td class='blank'></td>");
       $("#sliders_train").append("<td><svg id='svg_tree_train'></svg></td>");
+      $("#sliders_train").append('<td class="slider_endpoint_labels"> \
+                    <div class="top">top   </div> \
+                    <div class="bottom">bottom</div>\
+                </td>');
       $("#sliders_train").append("<td id='slider_col_train'><div id='vslider0_train' class='vertical_slider'>|</div></td>");
       $("#sliders_train").append("<td id='slider_col1_train'><div id='vslider1_train' class='vertical_slider'>|</div></td>");
       $("#slider_col1_train").hide();
       var scale = 1;
 
       // var color = "#800000"
-      Ecosystem.draw("bug",
-      {
-        "tar1":true,
-        "tar2":true,
-        "prop1":1,
-        "prop2":1,
-        "col1":{"mean":exp.color},
-        "col2":{"mean":exp.color},
-        "col3":{"mean":exp.color},
-        "col4":{"mean":exp.color},
-        "col5":{"mean":exp.color},
-        "var":0.1
-      }, "svg_bug_train", this.stim.x)
+      Ecosystem.draw("bug", bugProps, "svg_bug_train", this.stim.x)
 
-      Ecosystem.draw("tree",
-      {
-        "tar1":false,
-        "tar2":false,
-        "prop1":0.02,
-        "prop2":1,
-        "col1":{"mean":exp.color},
-        "col2":{"mean":exp.color},
-        "col3":{"mean":exp.color},
-        "col4":{"mean":exp.color},
-        "col5":{"mean":exp.color},
-      }, "svg_tree_train", 2 )
+      Ecosystem.draw("tree", treeProps, "svg_tree_train", 2)
 
       this.init_sliders();
       exp.sliderPost = [];
@@ -128,9 +146,10 @@ function make_slides(f) {
     },
     log_responses : function() {
       exp.data_trials.push({
-        "trial_type" : "fnLearning_train",
+        "trial_type" : "fnLearning_training",
         "input" : this.stim.x,
-        // "output" : this.stim.y,
+        "targetFn" : exp.targetFn,
+        "true_output" : this.stim.y,
         "response" : exp.sliderPost[0]
       });
     },
@@ -146,38 +165,20 @@ function make_slides(f) {
       $(".vertical_question").html("Different sized bugs live on different parts of the tree.<br> For a bug this size, how high on the tree does it live?");
       $(".sliders").empty();
 
+
+
       $(".sliders").append("<td><svg id='svg_bug'></svg></td><td id='blank'></td>");
       $(".sliders").append("<td><svg id='svg_tree'></svg></td>");
+      $(".sliders").append('<td class="slider_endpoint_labels"> \
+                    <div class="top">top   </div> \
+                    <div class="bottom">bottom</div>\
+                </td>');
       $(".sliders").append("<td id='slider_col'><div id='vslider0' class='vertical_slider'>|</div></td>");
       var scale = 1;
 
-      var color = "#800000"
-      Ecosystem.draw("bug",
-      {
-        "tar1":true,
-        "tar2":true,
-        "prop1":1,
-        "prop2":1,
-        "col1":{"mean":exp.color},
-        "col2":{"mean":exp.color},
-        "col3":{"mean":exp.color},
-        "col4":{"mean":exp.color},
-        "col5":{"mean":exp.color},
-        "var":0.1
-      }, "svg_bug", stim.x)
-
-      Ecosystem.draw("tree",
-      {
-        "tar1":false,
-        "tar2":false,
-        "prop1":0.02,
-        "prop2":1,
-        "col1":{"mean":exp.color},
-        "col2":{"mean":exp.color},
-        "col3":{"mean":exp.color},
-        "col4":{"mean":exp.color},
-        "col5":{"mean":exp.color},
-      }, "svg_tree", 2 )
+      // var color = "#800000"
+      Ecosystem.draw("bug",bugProps, "svg_bug", stim.x)
+      Ecosystem.draw("tree",treeProps, "svg_tree", 2 )
 
       this.init_sliders();
       exp.sliderPost = [];
@@ -196,27 +197,16 @@ function make_slides(f) {
     make_slider_callback : function() {
       return function(event, ui) {
         // $("#svg_bug").empty();
-        // var color = "#FFFFFF"
-        // Ecosystem.draw("bug",
-        // {
-        //   "tar1":false,
-        //   "tar2":false,
-        //   "prop1":0.2,
-        //   "prop2":1,
-        //   "col1":{"mean":color},
-        //   "col2":{"mean":color},
-        //   "col3":{"mean":color},
-        //   "col4":{"mean":color},
-        //   "col5":{"mean":color},
-        //   "var":0.1
-        // }, "svg_bug", ui.value)
+        // Ecosystem.draw("bug",bugProps, "svg_bug", ui.value)
         exp.sliderPost[0] = ui.value;
       };
     },
     log_responses : function() {
       exp.data_trials.push({
         "trial_type" : "fnLearning",
-        "question" : this.stim.question,
+        "input" : this.stim.x,
+        "targetFn" : exp.targetFn,
+        "true_output" : this.stim.y,
         "response" : exp.sliderPost[0]
       });
     },
@@ -234,6 +224,7 @@ function make_slides(f) {
         gender : $("#gender").val(),
         education : $("#education").val(),
         comments : $("#comments").val(),
+        targetFn : exp.targetFn,
       };
       exp.go(); //use exp.go() if and only if there is no "present" data.
     }
@@ -246,7 +237,7 @@ function make_slides(f) {
           "trials" : exp.data_trials,
           "catch_trials" : exp.catch_trials,
           "system" : exp.system,
-          "condition" : exp.condition,
+          "targetFn" : exp.targetFn,
           "subject_information" : exp.subj_data,
           "time_in_minutes" : (Date.now() - exp.startT)/60000
       };
@@ -259,12 +250,30 @@ function make_slides(f) {
 
 /// init ///
 function init() {
-  exp.color = "#316C0B"
-  exp.training_stims = [{x:0.25,y:0.75},{x:0.75, y:0.25}];
-  exp.test_stims = [{x:0.33}, {x:0.50}, {x:0.80}];
+  exp.nTrainingTrials = 3;
+  exp.nTestTrials = 2;
+
   exp.trials = [];
   exp.catch_trials = [];
-  exp.condition = _.sample(["CONDITION 1", "condition 2"]); //can randomize between subject conditions here
+
+  // exp.targetFn = _.sample(["y=1-x", "y=x", "y=sin(x)"])
+  exp.targetFn = "y=1-x";
+
+  // n random selected x-values
+
+  // this is effectively repeat randomly drawing x,y pairs consistent with the function
+  exp.training_stims = _.range(0, exp.nTrainingTrials).map(
+    function(x){ return makeDataPoint(functionsToLearn[exp.targetFn]) }
+  )
+  exp.test_stims = _.range(0, exp.nTestTrials).map(
+    function(x){
+       return makeDataPoint(functionsToLearn[exp.targetFn])
+    }
+  )
+
+  // could also do n equally spaced x-values
+  // that is more like pedagogical sampling
+
   exp.system = {
       Browser : BrowserDetect.browser,
       OS : BrowserDetect.OS,
@@ -273,6 +282,7 @@ function init() {
       screenW: screen.width,
       screenUW: exp.width
     };
+
   //blocks of the experiment:
   exp.structure=[
     "i0",

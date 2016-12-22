@@ -41,9 +41,22 @@
   max-width: 400px;
 }
 
+.top {
+    top: -38%;
+    position: relative;
+    text-align: right;
+}
+
+.bottom {
+    top: 230px;
+    position: relative;
+    transform: translateY(-200%);
+    text-align: right;
+}
+
+
 #vslider0_train {
   float: bottom;
-
   max-width: 100px;
 }
 #vslider1_train {
