@@ -164,3 +164,7 @@ textarea {
     width:0px;
     background-color:#000000
 }
+
+.err {
+	color: red
+}

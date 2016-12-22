@@ -4,23 +4,37 @@ function make_slides(f) {
   slides.i0 = slide({
      name : "i0",
      start: function() {
+       $("#timeMinutes").html(Math.round(
+       (exp.training_stims.length + exp.test_stims.length) / 6))
       exp.startT = Date.now();
      }
   });
 
   slides.instructions = slide({
     name : "instructions",
+    start: function() {
+      $(".trainingTrials").html(exp.training_stims.length);
+      $(".testTrials").html(exp.test_stims.length);
+    },
     button : function() {
       exp.go(); //use exp.go() if and only if there is no "present" data.
+    }
+  });
+
+  slides.intermediate_instructions = slide({
+    name : "intermediate_instructions",
+    start: function() {
+      $(".testTrials").html(exp.test_stims.length);
+    },
+    button : function() {
+      exp.go();
     }
   });
 
 
   slides.fn_learning_train = slide({
     name : "fn_learning_train",
-    present : _.shuffle([
-      {x: 0.71, y:0.31}, {x: 0.31, y:0.71}
-    ]),
+    present : _.shuffle(exp.training_stims),
     present_handle : function(stim) {
       $(".err").hide();
       $(".adjust").hide();
@@ -28,7 +42,7 @@ function make_slides(f) {
       this.stim = stim;
       // might need to change the id tags to classes
 
-      $(".vertical_question").html("Different sized bugs live on different parts of the tree.<br> For a bug this size, how high on the tree does it live?");
+      $(".vertical_question").html("Different sized bugs live at different heights on the tree.<br> For this bug on the left, how high on the tree does it live?");
       $("#sliders_train").empty();
 
       $("#sliders_train").append("<td><svg id='svg_bug_train'></svg></td><td class='blank'></td>");
@@ -38,18 +52,18 @@ function make_slides(f) {
       $("#slider_col1_train").hide();
       var scale = 1;
 
-      var color = "#FFFFFF"
+      // var color = "#800000"
       Ecosystem.draw("bug",
       {
         "tar1":true,
         "tar2":true,
         "prop1":1,
         "prop2":1,
-        "col1":{"mean":color},
-        "col2":{"mean":color},
-        "col3":{"mean":color},
-        "col4":{"mean":color},
-        "col5":{"mean":color},
+        "col1":{"mean":exp.color},
+        "col2":{"mean":exp.color},
+        "col3":{"mean":exp.color},
+        "col4":{"mean":exp.color},
+        "col5":{"mean":exp.color},
         "var":0.1
       }, "svg_bug_train", this.stim.x)
 
@@ -59,11 +73,11 @@ function make_slides(f) {
         "tar2":false,
         "prop1":0.02,
         "prop2":1,
-        "col1":{"mean":color},
-        "col2":{"mean":color},
-        "col3":{"mean":color},
-        "col4":{"mean":color},
-        "col5":{"mean":color},
+        "col1":{"mean":exp.color},
+        "col2":{"mean":exp.color},
+        "col3":{"mean":exp.color},
+        "col4":{"mean":exp.color},
+        "col5":{"mean":exp.color},
       }, "svg_tree_train", 2 )
 
       this.init_sliders();
@@ -83,9 +97,7 @@ function make_slides(f) {
 
     },
     button : function() {
-      console.log(exp.sliderPost)
-      console.log(this.stim.y)
-      // touched slider ?
+      // LOGIC: touched slider ?
       // show other slider with correct answer
       // make participant adjust their slider to match
       if (exp.sliderPost.length == 0) {
@@ -126,9 +138,7 @@ function make_slides(f) {
 
   slides.fn_learning_test = slide({
     name : "fn_learning_test",
-    present : _.shuffle([
-      {x: 0.71}, {x: 0.31}
-    ]),
+    present : _.shuffle(exp.test_stims),
     present_handle : function(stim) {
       $(".err").hide();
       this.stim = stim;
@@ -141,18 +151,18 @@ function make_slides(f) {
       $(".sliders").append("<td id='slider_col'><div id='vslider0' class='vertical_slider'>|</div></td>");
       var scale = 1;
 
-      var color = "#FFFFFF"
+      var color = "#800000"
       Ecosystem.draw("bug",
       {
         "tar1":true,
         "tar2":true,
         "prop1":1,
         "prop2":1,
-        "col1":{"mean":color},
-        "col2":{"mean":color},
-        "col3":{"mean":color},
-        "col4":{"mean":color},
-        "col5":{"mean":color},
+        "col1":{"mean":exp.color},
+        "col2":{"mean":exp.color},
+        "col3":{"mean":exp.color},
+        "col4":{"mean":exp.color},
+        "col5":{"mean":exp.color},
         "var":0.1
       }, "svg_bug", stim.x)
 
@@ -162,11 +172,11 @@ function make_slides(f) {
         "tar2":false,
         "prop1":0.02,
         "prop2":1,
-        "col1":{"mean":color},
-        "col2":{"mean":color},
-        "col3":{"mean":color},
-        "col4":{"mean":color},
-        "col5":{"mean":color},
+        "col1":{"mean":exp.color},
+        "col2":{"mean":exp.color},
+        "col3":{"mean":exp.color},
+        "col4":{"mean":exp.color},
+        "col5":{"mean":exp.color},
       }, "svg_tree", 2 )
 
       this.init_sliders();
@@ -249,6 +259,9 @@ function make_slides(f) {
 
 /// init ///
 function init() {
+  exp.color = "#316C0B"
+  exp.training_stims = [{x:0.25,y:0.75},{x:0.75, y:0.25}];
+  exp.test_stims = [{x:0.33}, {x:0.50}, {x:0.80}];
   exp.trials = [];
   exp.catch_trials = [];
   exp.condition = _.sample(["CONDITION 1", "condition 2"]); //can randomize between subject conditions here
@@ -261,7 +274,15 @@ function init() {
       screenUW: exp.width
     };
   //blocks of the experiment:
-  exp.structure=[ "fn_learning_train","i0", "instructions", 'subj_info', 'thanks'];
+  exp.structure=[
+    "i0",
+    "instructions",
+    "fn_learning_train",
+    "intermediate_instructions",
+    "fn_learning_test",
+    "subj_info",
+    "thanks"
+  ];
 
   exp.data_trials = [];
   //make corresponding slides:
