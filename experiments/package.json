@@ -1,12 +1,11 @@
 {
-  "name": "experiment-game",
+  "name": "fnLearning",
   "version": "0.0.1",
-  "description": "A game for cocolab.",
+  "description": "Function learning experiments served with node/express/socket.io",
   "dependencies": {
     "express": "^4.14.0",
     "moment": "^2.13.0",
-    "mysql": "^2.11.1",
-    "phaser": "^2.5.0",
-    "socket.io": "^1.4.8"
+    "socket.io": "^1.4.8",
+    "mongodb": "^2.2.0"
   }
 }

@@ -37,6 +37,8 @@ try {
 		 io = require('socket.io').listen(server)
 }
 
+// DATABASE INFORMATION
+
 // chains collection contains documents that look like:
 // {gen: 4, chain: 2, genInProgress: false, chainInProgress: true, workerid: workerid, condition: condition, startTime: time}
 
@@ -95,12 +97,23 @@ app.get(/^(.+)$/, function(req, res){
 //namespace for assigning experiment parameters
 var expnsp = io.of('/experiment-nsp')
 // this is run when the client is detected
+// CONDITION ASSIGNMENT
+//  IN THIS SITUATION, THIS IS CHAIN & GEN ASSIGNMENT
 expnsp.on('connection', function(socket){
 
   // TO DO
 	// proper handling of start time
 	// figure out waiting situation,
 	// icing: estimate wait time for next participant and display
+
+  // WARNING:
+  // currently, i'm making MongoDB queries (without callbacks, which are required)
+  // and pretending like I can store the results in a new variable
+  // this may not actually be possible.
+  // instead, we may have to do all this logic and new assignment within the callback
+
+  // http://stackoverflow.com/questions/35192122/how-do-i-store-a-mongodb-query-result-in-a-variable
+  // https://github.com/mongodb/node-mongodb-native#find-all-documents
 
 	// for max chain val
 	var newestChain = chain_collection.find().sort({chain:-1}).limit(1)
@@ -168,16 +181,18 @@ expnsp.on('connection', function(socket){
 		chainInProgress: chainInProgress // is this the end of the chain
 	})
 
+  // IF FIRST GEN: GENERATE RANDOM DATA FROM TRUE FUNCTION
 	var dataToPass = messages_collection.find({gen: lastGenInChain.gen, chain: chain}).message
+
 
 	var assignCondition = function(){
 		//code for determining the condition of the experiment
-		// TO DO: counterbalance
+		// TO DO: counterbalance by chains
 		var condition = _.sample(['language', 'data_incidental']) //
 		// send the client "condition var"
 	}
 
-	socket.emit('dataToPass', dataToPass);
+	socket.emit('dataPass', dataToPass);
 
 })
 
