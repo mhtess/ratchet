@@ -97,6 +97,10 @@ var expnsp = io.of('/experiment-nsp')
 // this is run when the client is detected
 expnsp.on('connection', function(socket){
 
+  // TO DO
+	// proper handling of start time
+	// figure out waiting situation,
+	// icing: estimate wait time for next participant and display
 
 	// for max chain val
 	var newestChain = chain_collection.find().sort({chain:-1}).limit(1)
@@ -165,11 +169,6 @@ expnsp.on('connection', function(socket){
 	})
 
 	var dataToPass = messages_collection.find({gen: lastGenInChain.gen, chain: chain}).message
-
-	// TO DO
-	// proper handling of start time
-	// figure out waiting situation,
-	// icing: estimate wait time for next participant and display
 
 	var assignCondition = function(){
 		//code for determining the condition of the experiment
