@@ -8,12 +8,13 @@
   table-layout: fixed;
 }*/
 
-#svg_bug{
+
+.blank{
   width: 200px;
   max-width: 200px;
 }
 
-#blank{
+#svg_bug{
   width: 200px;
   max-width: 200px;
 }
@@ -28,4 +29,37 @@
 }
 #slider_col {
   vertical-align: bottom;
+}
+
+#svg_bug_train{
+  width: 200px;
+  max-width: 200px;
+}
+
+#svg_tree_train{
+  height: 400px;
+  max-width: 400px;
+}
+
+#vslider0_train {
+  float: bottom;
+
+  max-width: 100px;
+}
+#vslider1_train {
+  float: bottom;
+  max-width: 100px;
+  border: 1px solid black;
+}
+#slider_col_train {
+  vertical-align: bottom;
+  width: 100px;
+  max-width: 100px;
+}
+#slider_col1_train {
+  vertical-align: bottom;
+  max-width: 100px;
+}
+.adjust{
+  color: blue
 }

@@ -15,6 +15,115 @@ function make_slides(f) {
     }
   });
 
+
+  slides.fn_learning_train = slide({
+    name : "fn_learning_train",
+    present : _.shuffle([
+      {x: 0.71, y:0.31}, {x: 0.31, y:0.71}
+    ]),
+    present_handle : function(stim) {
+      $(".err").hide();
+      $(".adjust").hide();
+
+      this.stim = stim;
+      // might need to change the id tags to classes
+
+      $(".vertical_question").html("Different sized bugs live on different parts of the tree.<br> For a bug this size, how high on the tree does it live?");
+      $("#sliders_train").empty();
+
+      $("#sliders_train").append("<td><svg id='svg_bug_train'></svg></td><td class='blank'></td>");
+      $("#sliders_train").append("<td><svg id='svg_tree_train'></svg></td>");
+      $("#sliders_train").append("<td id='slider_col_train'><div id='vslider0_train' class='vertical_slider'>|</div></td>");
+      $("#sliders_train").append("<td id='slider_col1_train'><div id='vslider1_train' class='vertical_slider'>|</div></td>");
+      $("#slider_col1_train").hide();
+      var scale = 1;
+
+      var color = "#FFFFFF"
+      Ecosystem.draw("bug",
+      {
+        "tar1":true,
+        "tar2":true,
+        "prop1":1,
+        "prop2":1,
+        "col1":{"mean":color},
+        "col2":{"mean":color},
+        "col3":{"mean":color},
+        "col4":{"mean":color},
+        "col5":{"mean":color},
+        "var":0.1
+      }, "svg_bug_train", this.stim.x)
+
+      Ecosystem.draw("tree",
+      {
+        "tar1":false,
+        "tar2":false,
+        "prop1":0.02,
+        "prop2":1,
+        "col1":{"mean":color},
+        "col2":{"mean":color},
+        "col3":{"mean":color},
+        "col4":{"mean":color},
+        "col5":{"mean":color},
+      }, "svg_tree_train", 2 )
+
+      this.init_sliders();
+      exp.sliderPost = [];
+
+      var label = "#vslider1_train";
+
+      $(label+ ' .ui-slider-handle').show();
+      $(label).slider({value:this.stim.y});
+      $(label).css({"background":"#99D6EB"});
+      $(label + ' .ui-slider-handle').css({
+        "background":"#667D94",
+        "border-color": "#001F29"
+      })
+      $(label).unbind("mousedown");
+      exp.sliderPost = [];
+
+    },
+    button : function() {
+      console.log(exp.sliderPost)
+      console.log(this.stim.y)
+      // touched slider ?
+      // show other slider with correct answer
+      // make participant adjust their slider to match
+      if (exp.sliderPost.length == 0) {
+        $(".err").show();
+      } else if (!$("#slider_col1_train").is(":visible")){
+        $("#slider_col1_train").show();
+        $(".adjust").show();
+        $(".err").hide();
+      } else if (
+        (exp.sliderPost[0] < this.stim.y - 0.04) ||
+        (exp.sliderPost[0] > this.stim.y + 0.04)
+      ) {
+        $(".err").hide();
+        $(".adjust").show();
+      } else {
+        this.log_responses();
+        _stream.apply(this);
+      }
+    },
+    init_sliders : function() {
+      utils.make_slider("#vslider0_train", this.make_slider_callback(), "vertical");
+      utils.make_slider("#vslider1_train", this.make_slider_callback(), "vertical");
+    },
+    make_slider_callback : function() {
+      return function(event, ui) {
+        exp.sliderPost[0] = ui.value;
+      };
+    },
+    log_responses : function() {
+      exp.data_trials.push({
+        "trial_type" : "fnLearning_train",
+        "input" : this.stim.x,
+        // "output" : this.stim.y,
+        "response" : exp.sliderPost[0]
+      });
+    },
+  });
+
   slides.fn_learning_test = slide({
     name : "fn_learning_test",
     present : _.shuffle([
@@ -24,12 +133,12 @@ function make_slides(f) {
       $(".err").hide();
       this.stim = stim;
 
-      $("#vertical_question").html("Different sized bugs live on different parts of the tree.<br> For a bug this size, how high on the tree does it live?");
-      $("#sliders").empty();
+      $(".vertical_question").html("Different sized bugs live on different parts of the tree.<br> For a bug this size, how high on the tree does it live?");
+      $(".sliders").empty();
 
-      $("#sliders").append("<td><svg id='svg_bug'></svg></td><td id='blank'></td>");
-      $("#sliders").append("<td><svg id='svg_tree'></svg></td>");
-      $("#sliders").append("<td id='slider_col'><div id='vslider0' class='vertical_slider'>|</div></td>");
+      $(".sliders").append("<td><svg id='svg_bug'></svg></td><td id='blank'></td>");
+      $(".sliders").append("<td><svg id='svg_tree'></svg></td>");
+      $(".sliders").append("<td id='slider_col'><div id='vslider0' class='vertical_slider'>|</div></td>");
       var scale = 1;
 
       var color = "#FFFFFF"
@@ -152,7 +261,7 @@ function init() {
       screenUW: exp.width
     };
   //blocks of the experiment:
-  exp.structure=[ "fn_learning_test","i0", "instructions", 'subj_info', 'thanks'];
+  exp.structure=[ "fn_learning_train","i0", "instructions", 'subj_info', 'thanks'];
 
   exp.data_trials = [];
   //make corresponding slides:
