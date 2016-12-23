@@ -1,4 +1,4 @@
-var opts = {method: "optimize", samples: 100, steps: 1000,
+var opts = {method: "optimize", samples: 10 0, steps: 1000,
             optMethod: {adam: {stepSize: .01}}};
 // var opts = {method: "MCMC", kernel: "HMC", samples: 1000, burn: 500, verbose: true};
 // var opts = {method: "MCMC", samples: 10000, burn: 5000, verbose: true};
@@ -19,11 +19,10 @@ var oneGeneration = function(data){
 
     var betas = diagCovGaussian(Vector([mu_0, mu_1]), Vector([sigma_b, sigma_b]))
     // simple linear regression
-    var obsFn = function(d){
+    mapData({data}, function(d){
       var predicted_y = T.get(betas, 0) + T.get(betas, 1)*d.x;
       observe(Gaussian({mu: predicted_y, sigma: sigma_y}), d.y);
-    };
-    mapData({data}, obsFn)
+    })
 
     return betas
   })
