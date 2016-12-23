@@ -1,3 +1,10 @@
+//useful docs:
+// https://www.tutorialspoint.com/mongodb/
+// http://blog.modulus.io/mongodb-tutorial
+// http://mongodb.github.io/node-mongodb-native/2.2/quick-start/
+// https://mongodb.github.io/node-mongodb-native/driver-articles/mongoclient.html
+// https://medium.com/@raj_adroit/mongodb-enable-authentication-enable-access-control-e8a75a26d332#.jxvypxm94
+
 // first run
 // mongod --port 27017 --dbpath /data/db --config /usr/local/etc/mongod.conf
 
@@ -81,22 +88,25 @@ MongoClient.connect(url, function (err, db) {
     //     console.log('No document(s) found with defined "find" criteria!');
     //   }
     // })
+    var tmp;
+    tmp = chain_collection.find().toArray()
+    console.log(tmp)
 
-    var docsFound;
-    messages_collection.find().toArray(function (err, result) {
-      if (err) {
-        console.log(err);
-      } else if (result.length) {
-        docsFound = result;
-        console.log(docsFound);
-      } else {
-        console.log('No document(s) found with defined "find" criteria!');
-      }
-    });
-
-    // this will print undefined because info doesn't get passed outside the callback
-    console.log(docsFound);
-
+    // var docsFound;
+    // messages_collection.find().toArray(function (err, result) {
+    //   if (err) {
+    //     console.log(err);
+    //   } else if (result.length) {
+    //     docsFound = result;
+    //     console.log(docsFound);
+    //   } else {
+    //     console.log('No document(s) found with defined "find" criteria!');
+    //   }
+    // });
+    //
+    // // this will print undefined because info doesn't get passed outside the callback
+    // console.log(docsFound);
+    //
 
 
 
