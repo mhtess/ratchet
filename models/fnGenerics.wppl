@@ -1,8 +1,14 @@
-var opts = {method: "optimize", samples: 10 0, steps: 1000,
-            optMethod: {adam: {stepSize: .01}}};
+// var opts = {method: "optimize", samples: 10 0, steps: 1000,
+//             optMethod: {adam: {stepSize: .01}}};
 // var opts = {method: "MCMC", kernel: "HMC", samples: 1000, burn: 500, verbose: true};
 // var opts = {method: "MCMC", samples: 10000, burn: 5000, verbose: true};
 // var opts = {method: "forward", samples: 1000}
+
+var bins = 20
+
+var snap = function(x){
+  return Math.round(x*bins)/bins
+}
 
 var posteriorPrediction = function(dist, x){
   var params = sample(dist);
@@ -14,38 +20,75 @@ var sigma_y = Math.sqrt(0.0025);
 var sigma_b = Math.sqrt(0.005);
 var mu_0 = 0, mu_1 = 1;
 
-var oneGeneration = function(data){
-  return Infer(opts, function(){
-
-    var betas = diagCovGaussian(Vector([mu_0, mu_1]), Vector([sigma_b, sigma_b]))
-    // simple linear regression
-    mapData({data}, function(d){
-      var predicted_y = T.get(betas, 0) + T.get(betas, 1)*d.x;
-      observe(Gaussian({mu: predicted_y, sigma: sigma_y}), d.y);
-    })
-
-    return betas
-  })
-};
-
-var passData = function(lastGenerationParameters){
-  return repeat(20, function(){
-    var x = uniform(0, 1);
-    var y = lastGenerationParameters ?
-          posteriorPrediction(lastGenerationParameters, x) :
-          1 - x; // start chain of learners with y = 1 - x function
-    return {x, y}
-  })
+// taking 2 pts and deciding: increase or decrease ?
+// MAYBE ELABORATE TO: 5 pt scale (*big increase*, *small decrease*)
+var diffs = function(pt1, pt2){
+  var dx = pt2.x - pt1.x;
+  var dy = pt2.y - pt1.y;
+  return snap(dx * dy)  // if dx & dy are the same sign, then positive slope
 }
 
-var runChain = function(n, data){
-  (n == 0) ?
-    oneGeneration(data) :
-    runChain(n - 1, passData(oneGeneration(data)))
+var stateModel = function(){
+  var betas = diagCovGaussian(Vector([0, 1]), Vector([1, 1]))
+  var xs = [uniform(0,1), uniform(0,1)];
+  var ys = [T.get(betas, 0) + T.get(betas, 1)*xs[0],
+            T.get(betas, 0) + T.get(betas, 1)*xs[1]];
+  var pt1 = {x:xs[0], y:ys[0]}, pt2 = {x:xs[1], y:ys[1]};
+  // for testing out different priors on betas
+  // return {b0: T.get(betas, 0),b1: T.get(betas, 1)};
+  return diffs(pt1, pt2);
 }
 
-runChain(2, passData())
+var statePrior = Infer({model: stateModel, method: "forward", samples: 10000})
 
-// oneGeneration(passData())
+var alpha_1 = 10;
+var alpha_2 = 1;
 
-// passData()
+var utterances = ["generic", "silence"];
+
+var thresholdBins = map(function(x){
+  return x - (1/(bins*2));
+}, sort(statePrior.support()));
+
+var thresholdPrior = Infer({model: function() { return uniformDraw(thresholdBins) } });
+var utterancePrior = Infer({model: function() { return uniformDraw(utterances) } })
+
+var meaning = function(utterance, state, threshold) {
+  return (utterance == "generic") ? state > threshold : true
+}
+
+var literalListener = cache(function(utterance, threshold) {
+  Infer({method: "enumerate"}, function(){
+    var state = sample(statePrior)
+    var m = meaning(utterance, state, threshold);
+    condition(m)
+    return state
+  })
+})
+
+var speaker1 = cache(function(state, threshold) {
+  Infer({method: "enumerate"}, function(){
+    var utterance = sample(utterancePrior)
+    var L0 = literalListener(utterance, threshold)
+    factor( alpha_1*L0.score(state) )
+    return utterance
+  })
+})
+
+var listener1 = cache(function(utterance) {
+  Infer({method: "enumerate"}, function(){
+    var state = sample(statePrior);
+    var threshold = sample(thresholdPrior);
+    var S1 = speaker1(state, threshold)
+    observe(S1, utterance)
+    return state
+  })
+})
+
+// viz.hist(statePrior)
+
+// viz.hist(thresholdPrior)thresholdBins
+// thresholdBins
+// statePrior.support()
+display(expectation(statePrior))
+expectation(listener1("generic"))
