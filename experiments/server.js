@@ -109,8 +109,8 @@ expnsp.on('connection', function(socket){
   // WARNING:
   // currently, i'm making MongoDB queries (without callbacks, which are required)
   // and pretending like I can store the results in a new variable
-  // this may not actually be possible.
-  // instead, we may have to do all this logic and new assignment within the callback
+  // i don't believe this is actually possible.
+  // instead, we may have to do all this logic and new assignment within callbacks
 
   // http://stackoverflow.com/questions/35192122/how-do-i-store-a-mongodb-query-result-in-a-variable
   // https://github.com/mongodb/node-mongodb-native#find-all-documents
