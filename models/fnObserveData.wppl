@@ -1,0 +1,28 @@
+// #### Observing data
+//
+// In order to update beliefs about the "diff-factored" state prior, I believe we will need to transform the observations of `(x, y)` pairs into observed differences. To do this: you could imagine sorting by the x.value first, and then computing the diffs. Below, I've taken the data in the order it appears. In general, this will matter for determining what data gets observed.
+//
+// The example below produces one set of diffs when the data is first sorted by x, and another when it is unsorted.
+
+var data = [{x:0.2,y:0.5},{x:0,y:0},{x:0.5,y:0.5},{x:0.7,y:0.2},{x:1,y:1}]
+
+// could imagine first sorting by x...
+var dataSortedByX = sort(data, lt, function(i){i.x});
+
+var targetData = data;
+
+map(function(x){ display(JSON.stringify(x)) }, targetData)
+
+var diffs = function(pt1, pt2){
+  var dx = pt2.x - pt1.x;
+  var dy = pt2.y - pt1.y;
+  return dx * dy > 0 ? 1 : // if dx & dy are the same sign, then positive slope
+  dx * dy < 0 ? -1 :
+  0
+}
+
+display("diffs...")
+
+map2(diffs,
+     targetData.slice(0, targetData.length-1) ,
+     targetData.slice(1))

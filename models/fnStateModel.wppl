@@ -1,0 +1,68 @@
+// ### Function learning with with language
+//
+// We'd like to have a model of an agent who can observe `(x,y)` pairs, try to infer a function, and then talk about what she believes.
+//
+// #### State prior
+//
+// To do this, we will need to have a state prior that can be updated by `(x,y)` pairs and be talked about *generically*.
+//
+// Our goal is to have an utterance: "When X goes up, Y goes up".
+// - This could be a generic form of X went up & Y went up. This will be explored below using the idea of a diff between two points
+
+// var opts = {method: "optimize", samples: 10 0, steps: 1000,
+//             optMethod: {adam: {stepSize: .01}}};
+// var opts = {method: "MCMC", kernel: "HMC", samples: 1000, burn: 500, verbose: true};
+// var opts = {method: "MCMC", samples: 10000, burn: 5000, verbose: true};
+// var opts = {method: "forward", samples: 1000}
+
+var posteriorPrediction = function(dist, x){
+  var params = sample(dist);
+  return T.get(params, 0) + T.get(params, 1) * x;
+};
+
+// hyperparameters taken from KGL (2007) appendix
+var sigma_y = Math.sqrt(0.0025);
+var sigma_b = Math.sqrt(0.005);
+var mu_0 = 0, mu_1 = 1;
+
+// taking 2 pts and deciding: increase or decrease ?
+// MAYBE ELABORATE TO: 5 pt scale (*big increase*, *small decrease*)
+var diffs = function(pt1, pt2){
+  var dx = pt2.x - pt1.x;
+  var dy = pt2.y - pt1.y;
+  return dx * dy  // if dx & dy are the same sign, then positive slope
+  //   > 0 ? 1 :
+  //   dx * dy < 0 ? -1 :
+  //   0
+}
+
+var stateModel = function(){
+  // prior on functions could also be a mixture of pos, neg slopes, noise, etc?
+  //   var betas = flip(0.7) ?
+  //       diagCovGaussian(Vector([0, 1]), Vector([sigma_b, sigma_b])) :
+  //   flip(0.7) ?
+  //       diagCovGaussian(Vector([0, -1]), Vector([sigma_b, sigma_b])) :
+  //   flip(0.7) ?
+  //       diagCovGaussian(Vector([0.5, 0]), Vector([sigma_b, sigma_b])) :
+  var betas = diagCovGaussian(Vector([0, 1]), Vector([1, 1]))
+  var xs = [uniform(0,1), uniform(0,1)];
+  var ys = [T.get(betas, 0) + T.get(betas, 1)*xs[0],
+            T.get(betas, 0) + T.get(betas, 1)*xs[1]];
+  var pt1 = {x:xs[0], y:ys[0]}, pt2 = {x:xs[1], y:ys[1]};
+
+  // for testing out different priors on betas
+  // return {b0: T.get(betas, 0),b1: T.get(betas, 1)};
+  return diffs(pt1, pt2);
+}
+
+var statePrior = Infer({model: stateModel, method: "forward", samples: 10000})
+
+statePrior
+
+
+// diffs([0.1,0.2], [0.2,0.1])
+
+// ##### Notes
+//
+// + Is the `statePrior` against which the data is evaluated the same prior on functions ?
+// + should contact Griffiths / Kalish about prior on functions
