@@ -14,15 +14,8 @@
 // - `diffs < 0`  means it's decreasing
 //
 // ?
-
-// var opts = {method: "optimize", samples: 10 0, steps: 1000,
-//             optMethod: {adam: {stepSize: .01}}};
-// var opts = {method: "MCMC", kernel: "HMC", samples: 1000, burn: 500, verbose: true};
-// var opts = {method: "MCMC", samples: 10000, burn: 5000, verbose: true};
-// var opts = {method: "forward", samples: 1000}
-
-// var opts = {method: "optimize", samples: 10 0, steps: 1000,
-//             optMethod: {adam: {stepSize: .01}}};
+var opts = {method: "optimize", samples: 1000, steps: 1000,
+            optMethod: {adam: {stepSize: .01}}};
 // var opts = {method: "MCMC", kernel: "HMC", samples: 1000, burn: 500, verbose: true};
 // var opts = {method: "MCMC", samples: 10000, burn: 5000, verbose: true};
 // var opts = {method: "forward", samples: 1000}
@@ -59,7 +52,8 @@ var stateModel = function(){
   var pt1 = {x:xs[0], y:ys[0]}, pt2 = {x:xs[1], y:ys[1]};
   // for testing out different priors on betas
   // return {b0: T.get(betas, 0),b1: T.get(betas, 1)};
-  return diffs(pt1, pt2);
+//   return diffs(pt1, pt2);
+  return snap(T.get(betas, 1));
 }
 
 var statePrior = Infer({model: stateModel, method: "forward", samples: 10000})
@@ -69,32 +63,37 @@ var alpha_2 = 1;
 
 var utterances = ["generic_increasing", "generic_decreasing", "silence"];
 
-var thresholdBins = map(function(x){
+var lowerThresholdBins = map(function(x){
   return x - (1/(bins*2));
 }, sort(statePrior.support()));
 
-var thresholdPrior = Infer({model: function() { return uniformDraw(thresholdBins) } });
+var upperThresholdBins = map(function(x){
+  return x + (1/(bins*2));
+}, sort(statePrior.support()));
+
+var lowerThresholdPrior = Infer({model: function() { return uniformDraw(lowerThresholdBins) } });
+var upperThresholdPrior = Infer({model: function() { return uniformDraw(upperThresholdBins) } });
 var utterancePrior = Infer({model: function() { return uniformDraw(utterances) } })
 
-var meaning = function(utterance, state, threshold) {
-  return utterance === "generic_increasing" ? state > threshold :
-  return utterance === "generic_decreasing" ? state < threshold :
+var meaning = function(utterance, state, lowerThreshold, upperThreshold) {
+  return utterance === "generic_increasing" ? state > lowerThreshold :
+   utterance === "generic_decreasing" ? state < upperThreshold :
   true
 }
 
-var literalListener = cache(function(utterance, threshold) {
+var literalListener = cache(function(utterance, lowerThreshold, upperThreshold) {
   Infer({method: "enumerate"}, function(){
     var state = sample(statePrior)
-    var m = meaning(utterance, state, threshold);
+    var m = meaning(utterance, state, lowerThreshold, upperThreshold);
     condition(m)
     return state
   })
 })
 
-var speaker1 = cache(function(state, threshold) {
+var speaker1 = cache(function(state, lowerThreshold, upperThreshold) {
   Infer({method: "enumerate"}, function(){
     var utterance = sample(utterancePrior)
-    var L0 = literalListener(utterance, threshold)
+    var L0 = literalListener(utterance, lowerThreshold, upperThreshold)
     factor( alpha_1*L0.score(state) )
     return utterance
   })
@@ -103,8 +102,10 @@ var speaker1 = cache(function(state, threshold) {
 var listener1 = cache(function(utterance) {
   Infer({method: "enumerate"}, function(){
     var state = sample(statePrior);
-    var threshold = sample(thresholdPrior);
-    var S1 = speaker1(state, threshold)
+    var lowerThreshold = 0;//sample(lowerThresholdPrior);
+    var upperThreshold = 0;//sample(upperThresholdPrior);
+
+    var S1 = speaker1(state, lowerThreshold, upperThreshold)
     observe(S1, utterance)
     return state
   })
@@ -113,7 +114,7 @@ var listener1 = cache(function(utterance) {
 
 
 var observer = cache(function(data){
-  return Infer(observerOpts, function(){
+  return Infer(opts, function(){
 
     var betas = diagCovGaussian(Vector([mu_0, mu_1]), Vector([sigma_b, sigma_b]))
     // simple linear regression
@@ -122,9 +123,7 @@ var observer = cache(function(data){
       observe(Gaussian({mu: predicted_y, sigma: sigma_y}), d.y);
     })
 
-
-
-    return Vector([snap(T.get(betas,0)), snap(T.get(betas, 1))])
+    return snap(T.get(betas,1))
   })
 });
 
@@ -133,21 +132,21 @@ var data = repeat(20, function(){
   var y = 1 - x;
   return {x, y}
 })
-var post = observer(data)
-// post.support().length
-// viz(observer(data))
+// var post = observer(data)
+// // post.support().length
+// // viz(observer(data))
 
+// viz(post)
 var speaker = function(data){
   Infer({model: function(){
     var speakerBeliefs = observer(data);
     var state = sample(speakerBeliefs);
+//     display(state)
     var utterance = sample(utterancePrior);
     var L1 = listener1(utterance);
     factor(alpha_2 * L1.score(state));
-
+    return utterance
   }})
 }
 
-
-display(expectation(statePrior))
-expectation(listener1("generic"))
+viz(speaker(data))
