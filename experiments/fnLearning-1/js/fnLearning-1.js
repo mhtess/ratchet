@@ -1,11 +1,14 @@
-var socket = io('/experiment-nsp');
+
+// the following is commented to run locally:
+// var socket = io('/experiment-nsp');
 
 // HERE, WE GET DATA FROM THE LAST PARTICIPANT IN CHAIN
 // WE NEED TO THINK ABOUT WHAT TO DO IF THIS IS DATA PTS VS. LANGUAGE
-socket.on('dataPass', function(dataToPass){
-	console.log("dataPass callback");
-	exp.training_stims = dataToPass;
-});
+
+// socket.on('dataPass', function(dataToPass){
+// 	console.log("dataPass callback");
+// 	exp.training_stims = dataToPass;
+// });
 
 var functionsToLearn = {
   "y=1-x": function(x){return 1 - x},
