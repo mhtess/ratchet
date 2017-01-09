@@ -6,9 +6,6 @@ var opts = {method: "enumerate"};
 // var opts = {method: "MCMC", samples: 10000, burn: 5000, verbose: true};
 // var opts = {method: "forward", samples: 1000}
 
-var round = function(x, k){
-  return Math.round(x*10)/10
-};
 
 var generateLine = function(beliefs){
   return repeat(100, function(){
@@ -29,35 +26,6 @@ var posteriorPrediction = function(dist, x){
   return T.get(params, 0) + T.get(params, 1) * x;
 };
 
-// hyperparameters taken from KGL (2007) appendix
-var sigma_y = Math.sqrt(0.0025);
-var sigma_b = Math.sqrt(0.005);
-var mu_0 = 0, mu_1 = 1;
-
-var stateVals = map(
-  round,
-  _.range(-2, 2, 0.2)
-);
-
-var stateProbs = {
-  b0: map(function(s){
-    Math.exp(Gaussian({mu: mu_0, sigma: sigma_b}).score(s));
-  }, stateVals),
-  b1: map(function(s){
-      Math.exp(Gaussian({mu: mu_1, sigma: sigma_b}).score(s));
-  }, stateVals)
-};
-
-var statePrior = {
-  b0: Infer({
-    model: function(){
-      return categorical({vs: stateVals, ps: stateProbs.b0})
-    }}),
-  b1: Infer({
-    model: function(){
-      return categorical({vs: stateVals, ps: stateProbs.b1})
-  }})
-};
 
 var oneGeneration = function(data){
   return Infer(opts, function(){
@@ -95,7 +63,7 @@ var passData = function(lastGenerationParameters){
   })
 }
 
-var nChains = 20;
+var nChains = 10;
 
 var runChain = function(n, data){
   var b =  oneGeneration(data);
@@ -114,8 +82,8 @@ var runChain = function(n, data){
   }
 }
 //
-// var gens = runChain(nChains, data);
-// nChains;
+var gens = runChain(nChains, data);
+nChains;
 
 
-statePrior.b1
+// statePrior.b1
