@@ -14,139 +14,150 @@
 // - `diffs < 0`  means it's decreasing
 //
 // ?
-var opts = {method: "optimize", samples: 1000, steps: 1000,
-            optMethod: {adam: {stepSize: .01}}};
+// var opts = {method: "optimize", samples: 1000, steps: 1000,
+//             optMethod: {adam: {stepSize: .01}}};
+var opts = {method: "enumerate"};
 // var opts = {method: "MCMC", kernel: "HMC", samples: 1000, burn: 500, verbose: true};
 // var opts = {method: "MCMC", samples: 10000, burn: 5000, verbose: true};
 // var opts = {method: "forward", samples: 1000}
 
-var bins = 20
-
 var snap = function(x){
-  return Math.round(x*bins)/bins
+  return Math.round(x*bins)/bins;
 }
 
-var posteriorPrediction = function(dist, x){
-  var params = sample(dist);
-  return T.get(params, 0) + T.get(params, 1) * x;
-};
-
-// hyperparameters taken from KGL (2007) appendix
-var sigma_y = Math.sqrt(0.0025);
-var sigma_b = Math.sqrt(0.005);
-var mu_0 = 0, mu_1 = 1;
-
-// taking 2 pts and deciding: increase or decrease ?
-// MAYBE ELABORATE TO: 5 pt scale (*big increase*, *small decrease*)
-var diffs = function(pt1, pt2){
-  var dx = pt2.x - pt1.x;
-  var dy = pt2.y - pt1.y;
-  return snap(dx * dy)  // if dx & dy are the same sign, then positive slope
-}
-
-var stateModel = function(){
-  var betas = diagCovGaussian(Vector([0, 1]), Vector([1, 1]))
-  var xs = [uniform(0,1), uniform(0,1)];
-  var ys = [T.get(betas, 0) + T.get(betas, 1)*xs[0],
-            T.get(betas, 0) + T.get(betas, 1)*xs[1]];
-  var pt1 = {x:xs[0], y:ys[0]}, pt2 = {x:xs[1], y:ys[1]};
-  // for testing out different priors on betas
-  // return {b0: T.get(betas, 0),b1: T.get(betas, 1)};
-//   return diffs(pt1, pt2);
-  return snap(T.get(betas, 1));
-}
-
-var statePrior = Infer({model: stateModel, method: "forward", samples: 10000})
-
-var alpha_1 = 10;
-var alpha_2 = 1;
-
+var alphas = {s1: 3, s2: 1};
 var utterances = ["generic_increasing", "generic_decreasing", "silence"];
 
+var minBin = stateVals[0];
+var maxBin = stateVals[stateVals.length - 1];
+var nBins = stateVals.length;
+var binWidth = (Math.abs(maxBin) + Math.abs(minBin)) / (nBins - 1);
+
 var lowerThresholdBins = map(function(x){
-  return x - (1/(bins*2));
-}, sort(statePrior.support()));
+  return x - (binWidth / 2);
+}, stateVals);
 
 var upperThresholdBins = map(function(x){
-  return x + (1/(bins*2));
-}, sort(statePrior.support()));
+  return x + (binWidth / 2);
+}, stateVals);
 
-var lowerThresholdPrior = Infer({model: function() { return uniformDraw(lowerThresholdBins) } });
-var upperThresholdPrior = Infer({model: function() { return uniformDraw(upperThresholdBins) } });
-var utterancePrior = Infer({model: function() { return uniformDraw(utterances) } })
+var lowerThresholdPrior = Infer({
+  model: function() { return uniformDraw(lowerThresholdBins) }
+});
+var upperThresholdPrior = Infer({
+  model: function() { return uniformDraw(upperThresholdBins) }
+});
+var utterancePrior = Infer({
+  model: function() { return uniformDraw(utterances) }
+});
 
 var meaning = function(utterance, state, lowerThreshold, upperThreshold) {
-  return utterance === "generic_increasing" ? state > lowerThreshold :
+   utterance === "generic_increasing" ? state > lowerThreshold :
    utterance === "generic_decreasing" ? state < upperThreshold :
   true
 }
 
 var literalListener = cache(function(utterance, lowerThreshold, upperThreshold) {
-  Infer({method: "enumerate"}, function(){
-    var state = sample(statePrior)
+  Infer({model: function(){
+    var state = sample(statePrior.b1)
     var m = meaning(utterance, state, lowerThreshold, upperThreshold);
     condition(m)
     return state
-  })
+  }})
 })
 
 var speaker1 = cache(function(state, lowerThreshold, upperThreshold) {
-  Infer({method: "enumerate"}, function(){
+  Infer({model: function(){
     var utterance = sample(utterancePrior)
     var L0 = literalListener(utterance, lowerThreshold, upperThreshold)
-    factor( alpha_1*L0.score(state) )
+    factor( alphas.s1 * L0.score(state) )
     return utterance
-  })
+  }})
 })
 
 var listener1 = cache(function(utterance) {
-  Infer({method: "enumerate"}, function(){
-    var state = sample(statePrior);
+  Infer({model: function(){
+    var state = sample(statePrior.b1);
     var lowerThreshold = 0;//sample(lowerThresholdPrior);
     var upperThreshold = 0;//sample(upperThresholdPrior);
-
     var S1 = speaker1(state, lowerThreshold, upperThreshold)
     observe(S1, utterance)
     return state
-  })
+  }})
 })
 
 
-
-var observer = cache(function(data){
+var observer = cache(function(data, beliefs){
   return Infer(opts, function(){
-
-    var betas = diagCovGaussian(Vector([mu_0, mu_1]), Vector([sigma_b, sigma_b]))
-    // simple linear regression
+    var betas = Vector([
+      sample(beliefs.b0), sample(beliefs.b1)
+    ]);
     mapData({data}, function(d){
-      var predicted_y = T.get(betas, 0) + T.get(betas, 1)*d.x;
-      observe(Gaussian({mu: predicted_y, sigma: sigma_y}), d.y);
+        var predicted_y = T.get(betas, 0) + T.get(betas, 1)*d.x;
+        observe(Gaussian({mu: predicted_y, sigma: sigma_y}), d.y);
     })
-
-    return snap(T.get(betas,1))
+    return T.get(betas, 1);
   })
 });
 
-var data = repeat(20, function(){
-  var x = uniform(0,1);
-  var y = 1 - x;
-  return {x, y}
-})
+var generateData = function(){
+  return repeat(20, function(){
+    var x = uniform(0,1);
+    var y = 1 - x;
+    return {x, y}
+  });
+};
 // var post = observer(data)
 // // post.support().length
 // // viz(observer(data))
 
 // viz(post)
-var speaker = function(data){
+var gen0 = function(data){
   Infer({model: function(){
-    var speakerBeliefs = observer(data);
-    var state = sample(speakerBeliefs);
-//     display(state)
+    var speakerBeliefs = observer(data, statePrior);
+    var slope = sample(speakerBeliefs);
     var utterance = sample(utterancePrior);
     var L1 = listener1(utterance);
-    factor(alpha_2 * L1.score(state));
+    factor(alphas.s2 * L1.score(slope));
     return utterance
   }})
 }
 
-viz(speaker(data))
+var oneGeneration = function(uttDist, data){
+  Infer({model: function(){
+
+    var utt = sample(uttDist);
+    var beliefsAfterLanguage = listener1(utt); // currently, only on b1
+    var beliefsAfterData = observer(data,
+      {b0: statePrior.b0, b1: beliefsAfterLanguage}
+    );
+
+    var slope = sample(beliefsAfterData);
+    var utterance = sample(utterancePrior);
+    var L1 = listener1(utterance);
+    factor(alphas.s2 * L1.score(slope));
+    return utterance
+
+  }})
+}
+
+var nChains = 3;
+
+var runChain = function(n, lang){
+  var data = generateData();
+  var uttDist = oneGeneration(lang, data);
+  var nGen = (nChains - n)
+
+  display("gen-" +  nGen + " genDecreasing " +
+   Math.exp(uttDist.score("generic_decreasing")))
+  if (n == 0){
+    return uttDist;
+  } else {
+    return runChain(n - 1, uttDist);
+  }
+}
+
+var g0 = gen0(generateData());
+
+runChain(nChains, g0);
+// speaker(data)
