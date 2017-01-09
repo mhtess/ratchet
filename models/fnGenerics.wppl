@@ -25,6 +25,10 @@ var snap = function(x){
   return Math.round(x*bins)/bins;
 }
 
+var marginalize = function(dist, key){
+  return Infer({model: function(){ return sample(dist)[key]}})
+};
+
 var alphas = {s1: 3, s2: 1};
 var utterances = ["generic_increasing", "generic_decreasing", "silence"];
 
@@ -119,7 +123,7 @@ var gen0 = function(data){
     var utterance = sample(utterancePrior);
     var L1 = listener1(utterance);
     factor(alphas.s2 * L1.score(slope));
-    return utterance
+    return {utterance, slope}
   }})
 }
 
@@ -136,28 +140,40 @@ var oneGeneration = function(uttDist, data){
     var utterance = sample(utterancePrior);
     var L1 = listener1(utterance);
     factor(alphas.s2 * L1.score(slope));
-    return utterance
+    return {utterance, slope}
 
   }})
 }
 
-var nChains = 3;
+var nChains = 10;
 
 var runChain = function(n, lang){
   var data = generateData();
-  var uttDist = oneGeneration(lang, data);
-  var nGen = (nChains - n)
 
-  display("gen-" +  nGen + " genDecreasing " +
+  // var lang = marginalize(prevGen, "utterance");
+  var thisGen = oneGeneration(lang, data);
+  var nGen = (nChains - n);
+
+  var uttDist = marginalize(thisGen, "utterance");
+  // var slopeDist = marginalize(prevGen, "slope");
+
+  display("gen-" +  nGen + " genDecreasing = " +
    Math.exp(uttDist.score("generic_decreasing")))
+
+   display("gen-" +  nGen + " slope =  " +
+   expectation(thisGen, function(x){return x.slope }))
+
   if (n == 0){
     return uttDist;
   } else {
     return runChain(n - 1, uttDist);
   }
+
 }
 
 var g0 = gen0(generateData());
 
-runChain(nChains, g0);
+display("gen-00 slope = " + expectation(g0, function(x){return x.slope }))
+
+runChain(nChains, marginalize(g0, "utterance"));
 // speaker(data)
