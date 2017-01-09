@@ -1,8 +1,14 @@
-var opts = {method: "optimize", samples: 1000, steps: 1000,
-            optMethod: {adam: {stepSize: .01}}};
+// var opts = {method: "optimize", samples: 1000, steps: 1000,
+//             optMethod: {adam: {stepSize: .01}}};
+
+var opts = {method: "enumerate"};
 // var opts = {method: "MCMC", kernel: "HMC", samples: 1000, burn: 500, verbose: true};
 // var opts = {method: "MCMC", samples: 10000, burn: 5000, verbose: true};
 // var opts = {method: "forward", samples: 1000}
+
+var round = function(x, k){
+  return Math.round(x*10)/10
+};
 
 var generateLine = function(beliefs){
   return repeat(100, function(){
@@ -28,17 +34,46 @@ var sigma_y = Math.sqrt(0.0025);
 var sigma_b = Math.sqrt(0.005);
 var mu_0 = 0, mu_1 = 1;
 
+var stateVals = map(
+  round,
+  _.range(-2, 2, 0.2)
+);
+
+var stateProbs = {
+  b0: map(function(s){
+    Math.exp(Gaussian({mu: mu_0, sigma: sigma_b}).score(s));
+  }, stateVals),
+  b1: map(function(s){
+      Math.exp(Gaussian({mu: mu_1, sigma: sigma_b}).score(s));
+  }, stateVals)
+};
+
+var statePrior = {
+  b0: Infer({
+    model: function(){
+      return categorical({vs: stateVals, ps: stateProbs.b0})
+    }}),
+  b1: Infer({
+    model: function(){
+      return categorical({vs: stateVals, ps: stateProbs.b1})
+  }})
+};
+
 var oneGeneration = function(data){
   return Infer(opts, function(){
-    var betas = diagCovGaussian(
-      Vector([mu_0, mu_1]), Vector([sigma_b, sigma_b])
-    )
+    var betas = Vector([
+      sample(statePrior.b0), sample(statePrior.b1)
+    ]);
+
+    // diagCovGaussian(
+    //   Vector([mu_0, mu_1]), Vector([sigma_b, sigma_b])
+    // );
     // simple linear regression
     mapData({data}, function(d){
         var predicted_y = T.get(betas, 0) + T.get(betas, 1)*d.x;
         observe(Gaussian({mu: predicted_y, sigma: sigma_y}), d.y);
     })
-    return Vector([snap(T.get(betas,0)), snap(T.get(betas,1))])
+    return betas //Vector([snap(T.get(betas,0)), snap(T.get(betas,1))])
     //return betas
   })
 }
@@ -60,18 +95,27 @@ var passData = function(lastGenerationParameters){
   })
 }
 
-var nChains = 10;
+var nChains = 20;
 
 var runChain = function(n, data){
   var b =  oneGeneration(data);
   var nGen = (nChains - n)
-  display("gen-" +  nGen + " intercept = " + expectation(b, function(x){return x.data[0]}))
-  display("gen-" + nGen + " slope = " + expectation(b, function(x){return x.data[1]}) )
+
+  display("gen-" +  nGen +
+    " intercept = " +
+    round(expectation(b, function(x){return x.data[0]})) +
+    " slope = " +
+    round(expectation(b, function(x){return x.data[1]}) )
+  )
   if (n == 0) {
     return b
   } else{
     return runChain(n - 1, passData(b));
   }
 }
+//
+// var gens = runChain(nChains, data);
+// nChains;
 
-runChain(nChains, data);
+
+statePrior.b1
