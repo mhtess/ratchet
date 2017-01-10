@@ -29,6 +29,28 @@ var marginalize = function(dist, key){
   return Infer({model: function(){ return sample(dist)[key]}})
 };
 
+var generateData = function(){
+  return repeat(20, function(){
+    var x = uniform(0,1);
+    var y = 1 - x;
+    return {x, y}
+  });
+};
+
+var KL = function(P,Q) {
+  var diverge = function(xp,xq) {
+    return xp == 0 ? 0 : (xp * Math.log(xp / xq) );
+  };
+  return sum(map2(diverge,P,Q));
+};
+
+
+var distProbs = function(dist, supp) {
+  return map(function(s) {
+    return Math.exp(dist.score(s))
+  }, supp)
+}
+
 var alphas = {s1: 3, s2: 1};
 var utterances = ["generic_increasing", "generic_decreasing", "silence"];
 
@@ -55,11 +77,22 @@ var utterancePrior = Infer({
   model: function() { return uniformDraw(utterances) }
 });
 
+// soft truth functional semantics
 var meaning = function(utterance, state, lowerThreshold, upperThreshold) {
-   utterance === "generic_increasing" ? state > lowerThreshold :
-   utterance === "generic_decreasing" ? state < upperThreshold :
+   utterance === "generic_increasing" ? state > lowerThreshold  ? flip(0.99) : flip(0.01 ) :
+   utterance === "generic_decreasing" ? state < upperThreshold ? flip(0.99) : flip(0.01 ) :
+   utterance === "generic_decreasing_alot" ? state < -0.55 ? flip(0.99) : flip(0.01 ) :
   true
 }
+
+// hard truth functional semantics
+// var meaning = function(utterance, state, lowerThreshold, upperThreshold) {
+//    utterance === "generic_increasing" ? state > lowerThreshold  :
+//    utterance === "generic_decreasing" ? state < upperThreshold :
+//    utterance === "generic_decreasing_alot" ? state < -0.55 :
+//   true
+// }
+
 
 var literalListener = cache(function(utterance, lowerThreshold, upperThreshold) {
   Infer({model: function(){
@@ -90,7 +123,6 @@ var listener1 = cache(function(utterance) {
   }})
 })
 
-
 var observer = cache(function(data, beliefs){
   return Infer(opts, function(){
     var betas = Vector([
@@ -104,58 +136,57 @@ var observer = cache(function(data, beliefs){
   })
 });
 
-var generateData = function(){
-  return repeat(20, function(){
-    var x = uniform(0,1);
-    var y = 1 - x;
-    return {x, y}
-  });
-};
-// var post = observer(data)
-// // post.support().length
-// // viz(observer(data))
 
-// viz(post)
 var gen0 = function(data){
   Infer({model: function(){
     var speakerBeliefs = observer(data, statePrior);
-    var slope = sample(speakerBeliefs);
     var utterance = sample(utterancePrior);
     var L1 = listener1(utterance);
-    factor(alphas.s2 * L1.score(slope));
-    return {utterance, slope}
+
+    var _kl = KL(
+      distProbs(speakerBeliefs, speakerBeliefs.support()),
+      distProbs(L1, speakerBeliefs.support())
+    );
+
+    factor(-1 * _kl)
+
+    return {utterance: utterance, slope: sample(speakerBeliefs)}
   }})
 }
 
 var oneGeneration = function(uttDist, data){
   Infer({model: function(){
 
-    var utt = sample(uttDist);
-    var beliefsAfterLanguage = listener1(utt); // currently, only on b1
+    // Belief updating
+    var utt = sample(uttDist); // what I heard.
+    var beliefsAfterLanguage = listener1(utt); // upadate beliefs via RSA L1
     var beliefsAfterData = observer(data,
       {b0: statePrior.b0, b1: beliefsAfterLanguage}
     );
 
-    var slope = sample(beliefsAfterData);
-    var utterance = sample(utterancePrior);
+    // Language production
+    // var slope = sample(beliefsAfterData);
+    var utterance = sample(utterancePrior); // what to say?
     var L1 = listener1(utterance);
-    factor(alphas.s2 * L1.score(slope));
-    return {utterance, slope}
 
+    var _kl = KL(
+      distProbs(beliefsAfterData, beliefsAfterData.support()),
+      distProbs(L1, beliefsAfterData.support())
+    );
+    factor(-1 * _kl)
+    return {utterance: utterance, slope: sample(beliefsAfterData)}
   }})
 }
 
-var nChains = 10;
+var nChains = 20;
 
 var runChain = function(n, lang){
-  var data = generateData();
 
-  // var lang = marginalize(prevGen, "utterance");
+  var data = generateData();
   var thisGen = oneGeneration(lang, data);
   var nGen = (nChains - n);
 
   var uttDist = marginalize(thisGen, "utterance");
-  // var slopeDist = marginalize(prevGen, "slope");
 
   display("gen-" +  nGen + " genDecreasing = " +
    Math.exp(uttDist.score("generic_decreasing")))
@@ -172,8 +203,4 @@ var runChain = function(n, lang){
 }
 
 var g0 = gen0(generateData());
-
-display("gen-00 slope = " + expectation(g0, function(x){return x.slope }))
-
 runChain(nChains, marginalize(g0, "utterance"));
-// speaker(data)
