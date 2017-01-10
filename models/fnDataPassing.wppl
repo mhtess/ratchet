@@ -6,6 +6,9 @@ var opts = {method: "enumerate"};
 // var opts = {method: "MCMC", samples: 10000, burn: 5000, verbose: true};
 // var opts = {method: "forward", samples: 1000}
 
+var marginalize = function(dist, key){
+  return Infer({model: function(){ return sample(dist)[key]}})
+};
 
 var generateLine = function(beliefs){
   return repeat(100, function(){
@@ -41,20 +44,21 @@ var oneGeneration = function(data){
         var predicted_y = T.get(betas, 0) + T.get(betas, 1)*d.x;
         observe(Gaussian({mu: predicted_y, sigma: sigma_y}), d.y);
     })
-    return betas //Vector([snap(T.get(betas,0)), snap(T.get(betas,1))])
-    //return betas
+    // return T.get(betas,1) //Vector([snap(T.get(betas,0)), snap(T.get(betas,1))])
+    return betas
   })
 }
 
+var dataSetSize = 5;
 
-var data = repeat(20, function(){
+var data = repeat(dataSetSize, function(){
   var x = uniform(0,1);
   var y = 1 - x;
   return {x, y}
 })
 
 var passData = function(lastGenerationParameters){
-  return repeat(20, function(){
+  return repeat(dataSetSize, function(){
     var x = uniform(0, 1);
     var y = lastGenerationParameters ?
         posteriorPrediction(lastGenerationParameters, x) :
@@ -63,7 +67,7 @@ var passData = function(lastGenerationParameters){
   })
 }
 
-var nChains = 10;
+var nChains = 30;
 
 var runChain = function(n, data){
   var b =  oneGeneration(data);
@@ -83,7 +87,9 @@ var runChain = function(n, data){
 }
 //
 var gens = runChain(nChains, data);
-nChains;
-
+// nChains
+Infer({model: function(){
+  return sample(gens).data[1]
+}})
 
 // statePrior.b1
