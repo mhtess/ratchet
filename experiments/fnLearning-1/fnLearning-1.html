@@ -36,7 +36,7 @@
     <link href="../css/local-style.css" rel="stylesheet" type="text/css"/>
 
     <!-- experiment file -->
-    <script src="js/fnLearning-1.js"></script>    
+    <script src="js/fnLearning-1.js"></script>
     <script>
     var socket = io('/function-nsp')
 
@@ -60,23 +60,24 @@
 
   <div class="slide" id="instructions">
       <h3>Instructions</h3>
-      <p>Imagine you're a scientist on a far-away island.
-        On this island, there is one big tree where bugs live.
-        <strong>Different sized bugs live at different heights on the tree.</strong>
+      <p>
+        In this experiment, we want you to imagine you're a scientist on a far-away island.
+        On this island, there is one very tall tree where all bugs live.
+        It turns out: <strong>different sized bugs live at different heights on the tree.</strong>
         Your job is to figure out which sized bugs live on which heights of the tree. </p>
       <p>
-        First, you will go through a training period.
-        You'll be given a bug of a certain size and guess how high on the tree it should be.
-        After you guess, you will be shown where the bug actually goes.
+        First, you will go through an exploration phase.
+        You'll be given a bug of a certain size and you can guess how high on the tree it should be.
+        After you guess, you will be shown where the bug actually lives.
         To continue, you must adjust the slider to match the correct answer.
-        There are <span class="trainingTrials">{{}}</span> training trials.
+        There are <span class="trainingTrials">{{}}</span> exploration trials.
       </p>
       <p>
-        After the training period, you will be tested on what you've learned.
-        It will be the same as the training period except you will <strong>not</strong> be shown where the bug actually goes.
-        There will be <span class="testTrials">{{}}</span> test trials.
+        After the exploration phase, you will be asked to provide your best guess to similar questions based on what you've learned.
+        It will be the same as the exploration phase except you will <strong>not</strong> be shown where the bug actually lives.
+        There will be <span class="testTrials">{{}}</span> of these trials.
       </p>
-      <p>When you're ready to go to the training phase, press the "Continue" button bellow.</p>
+      <p>When you're ready to go to the exploration phase, press the "Continue" button below.</p>
       <button onclick="_s.button()">Continue</button>
   </div>
 
@@ -84,14 +85,17 @@
   <div class="slide" id="intermediate_instructions">
       <h3>Intermediate instructions</h3>
       <p>
-        Congratulations on completing the training phase. In the test phase, you will be shown a bug of a certain size and asked how high on the tree it goes. There are <span class="testTrials">{{}}</span> test trials.
+        Congratulations on completing the exploration phase.
+        In the next phase, you will be shown a bug of a certain size and asked how high on the tree it lives.
+        There are <span class="testTrials">{{}}</span> of these trials.
       </p>
-      <p>When you're ready to go to the test phase, press the "Continue" button bellow.</p>
+      <p>When you're ready to go to the test phase, press the "Continue" button below.</p>
       <button onclick="_s.button()">Continue</button>
   </div>
 
   <div class="slide" id="fn_learning_test">
-      <p class="vertical_question">{{}}</p>
+    <p class="passedMessage"></p>
+    <p class="vertical_question">{{}}</p>
     <table id="vertical_slider_table" class="slider_table">
       <tbody>
         <tr class="sliders">
@@ -103,6 +107,7 @@
   </div>
 
   <div class="slide" id="fn_learning_train">
+    <p class="passedMessage"></p>
     <p class="vertical_question">{{}}</p>
     <table id="vertical_slider_table_train" class="slider_table">
       <tbody>
@@ -118,6 +123,48 @@
   </div>
 
 
+  <div class="slide" id="language_instructions">
+      <h3>Instructions</h3>
+      <p>
+        In this experiment, we want you to imagine you're a scientist on a far-away island.
+        On this island, there is one very tall tree where all bugs live.
+        It turns out: <strong>different sized bugs live at different heights on the tree.</strong>
+        Your job is to figure out which sized bugs live on which heights of the tree. </p>
+      <p>
+        First, you will go through an exploration phase.
+        You'll be given a bug of a certain size and you can guess how high on the tree it should be.
+        After you guess, you will be shown where the bug actually lives.
+        To continue, you must adjust the slider to match the correct answer.
+        There are <span class="trainingTrials">{{}}</span> exploration trials.
+      </p>
+      <p>
+        After the exploration phase, you will be asked to provide your best guess to similar questions based on what you've learned.
+        It will be the same as the exploration phase except you will <strong>not</strong> be shown where the bug actually lives.
+        There will be <span class="testTrials">{{}}</span> of these trials.
+      </p>
+      <p>
+        Finally, you are not alone in this endeavour.
+        You part of a long tradition of scientists on this island.
+        The last scientist to visit the island went through the same learning phases as you will.
+        They have left you a message about what they believe about the bugs in the trees based on what they learned from their own experience and from the scientist before them.
+        Their message will be visible to you throughout the entire experiment.
+      </p>
+      <p>When you're ready to go to the exploration phase, press the "Continue" button below.</p>
+      <button onclick="_s.button()">Continue</button>
+  </div>
+
+
+  <div class="slide" id="debrief">
+      <h3>Debrief</h3>
+      <p>
+        Thank you for completing both phases of the experiment.
+      </p>
+      <p id="messageElicitation"> </p>
+      <p>Press the "Continue" button below to complete a short questionnaire and finish the experiment.</p>
+      <button onclick="_s.button()">Continue</button>
+  </div>
+
+
 
   <div class="slide"  id="subj_info">
     <div class="long_form">
@@ -127,6 +174,14 @@
       <label><input type="radio"  name="assess" value="No"/>No</label>
       <label><input type="radio"  name="assess" value="Yes"/>Yes</label>
       <label><input type="radio"  name="assess" value="Confused"/>I was confused</label>
+
+
+      <p>Were there any problems or bugs in the experiment?</p>
+      <textarea id="problems" rows="2" cols="50"></textarea>
+
+      <p>What do you think is a fair price for the work you did?</p>
+      <textarea id="fairprice" rows="1" cols="10"></textarea>
+
 
       <p>Gender:
         <select id="gender">

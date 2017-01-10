@@ -10,18 +10,18 @@
 // 	exp.training_stims = dataToPass;
 // });
 
-function param( param ) { 
+function param( param ) {
     param = param.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
-    var regexS = "[\\?&]"+param+"=([^&#]*)"; 
-    var regex = new RegExp( regexS ); 
+    var regexS = "[\\?&]"+param+"=([^&#]*)";
+    var regex = new RegExp( regexS );
     var tmpURL = window.location.href
-    var results = regex.exec( tmpURL ); 
+    var results = regex.exec( tmpURL );
     console.log("param: " + param + ", URL: " + tmpURL)
-    if( results == null ) { 
-        return ""; 
-    } else { 
-        return results[1];    
-    } 
+    if( results == null ) {
+        return "";
+    } else {
+        return results[1];
+    }
 }
 
 socket.on('workerID request', function(){
@@ -99,12 +99,40 @@ function make_slides(f) {
     }
   });
 
+  slides.language_instructions = slide({
+    name : "language_instructions",
+    start: function() {
+      $(".trainingTrials").html(exp.training_stims.length);
+      $(".testTrials").html(exp.test_stims.length);
+    },
+    button : function() {
+      exp.go(); //use exp.go() if and only if there is no "present" data.
+    }
+  });
+
+
   slides.intermediate_instructions = slide({
     name : "intermediate_instructions",
     start: function() {
       $(".testTrials").html(exp.test_stims.length);
     },
     button : function() {
+      exp.go();
+    }
+  });
+
+  slides.debrief = slide({
+    name : "debrief",
+    start: function() {
+      $(".trainingTrials").html(exp.training_stims.length);
+      $(".testTrials").html(exp.test_stims.length);
+
+      exp.condition == "language" ?
+      $("#messageElicitation").html('In the box below, please describe what you believe is the relation between the size of the bug and the height on tree where it lives. This message will be shared with the next participant in order to help them learn. <textarea id="message" rows="2" cols="50"></textarea>');
+
+    },
+    button : function() {
+      // TODO: SAVE MESSAGE THAT IS PASSED
       exp.go();
     }
   });
@@ -120,7 +148,19 @@ function make_slides(f) {
       this.stim = stim;
       // might need to change the id tags to classes
 
-      $(".vertical_question").html("Different sized bugs live at different heights on the tree.<br> For this bug on the left, how high on the tree does it live?");
+      var verticalQuestion;
+      if (exp.condition == "language"){
+        verticalQuestion = "Different sized bugs live at different heights on the tree.<br> The last scientist on the island left you the following message:"+
+        // TODO: INPUT PREVIOUS MESSAGE
+        +
+        "<br>For this bug on the left, how high on the tree does it live?"
+      } else {
+        verticalQuestion = "Different sized bugs live at different heights on the tree.<br> For this bug on the left, how high on the tree does it live?"
+      }
+
+
+
+      $(".vertical_question").html(verticalQuestion);
       $("#sliders_train").empty();
 
       $("#sliders_train").append("<td><svg id='svg_bug_train'></svg></td><td class='blank'></td>");
@@ -203,7 +243,16 @@ function make_slides(f) {
       $(".err").hide();
       this.stim = stim;
 
-      $(".vertical_question").html("Different sized bugs live on different parts of the tree.<br> For a bug this size, how high on the tree does it live?");
+      var verticalQuestion;
+      if (exp.condition == "language"){
+        verticalQuestion = "Different sized bugs live at different heights on the tree.<br> The last scientist on the island left you the following message:"+
+        // TODO: INPUT PREVIOUS MESSAGE
+        +
+        "<br>For this bug on the left, how high on the tree does it live?"
+      } else {
+        verticalQuestion = "Different sized bugs live at different heights on the tree.<br> For this bug on the left, how high on the tree does it live?"
+      }
+
       $(".sliders").empty();
 
 
@@ -264,8 +313,10 @@ function make_slides(f) {
         age : $("#age").val(),
         gender : $("#gender").val(),
         education : $("#education").val(),
-        comments : $("#comments").val(),
         targetFn : exp.targetFn,
+        problems: $("#problems").val(),
+        fairprice: $("#fairprice").val(),
+        comments : $("#comments").val()
       };
       exp.go(); //use exp.go() if and only if there is no "present" data.
     }
@@ -331,6 +382,7 @@ function init() {
     "fn_learning_train",
     "intermediate_instructions",
     "fn_learning_test",
+    "debrief",
     "subj_info",
     "thanks"
   ];
