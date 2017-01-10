@@ -5,7 +5,7 @@ var express = require('express'),
  		moment = require('moment');
 
 vm.runInThisContext(fs.readFileSync(__dirname + '/config.js'))
-var use_db = configs.use_db
+// var use_db = configs.use_db
 var time_to_play = configs.play_time
 var exit_survey_url = configs.exit_survey_url
 
@@ -51,233 +51,187 @@ try {
 // consult nathaniel's mysql code for ideas for continuous time expts
 // {gen: 4, chain: 2, trial: 14, stimulus: 0.34, response: 0.76, feedback: false, workerid: workerid, condition: condition}
 
+var mongodb = require('mongodb')
+var MongoClient = mongodb.MongoClient
+var url = 'mongodb://superAdmin:admin123@localhost:27017/mydb?'
+var db
+MongoClient.connect(url, function(err, database){
+	if(err){
+		console.log("Error connecting to mongoDB server: ", err)
+	}else{
+		console.log("Connection established to", url)
+		db = database
+		main(db)
+	}
+})	
 
-if (use_db) {
-	var mongodb = require('mongodb');
-	//We need to work with "MongoClient" interface in order to connect to a mongodb server.
-	var MongoClient = mongodb.MongoClient;
-	// var url = 'mongodb://superAdmin:admin123@localhost:27017/admin';
-	var url = 'mongodb://superAdmin:admin123@localhost:27017/mydb?';
-	// var url = 'mongodb://[username:password@]host1[:port1][/[database][?options]]'
-	var db, chain_collection, results_collection;
-	// Initialize connection once
-	MongoClient.connect(url, function(err, database) {
-	  // if(err) throw err;
-		if (err) {
-	    console.log('Unable to connect to the mongoDB server. Error:', err);
-	  } else {
-			console.log('Connection established to', url);
-		  db = database;
-			chain_collection = db.collection('chains');
-			messages_collection = db.collection('messages');
-			trials_collection = db.collection('trials');
-		  // Start the application after the database connection is ready
-		  app.listen(3000);
-		  console.log("Listening on port 3000");
-		}
-	});
+var main = function(db){
+	app.listen(3000)
+	console.log("listening on port 3000")
+	var chain_collection = db.collection('chains')
+	var data_collection = db.collection('data')
+	var language_collection = db.collection('language')
+	var trials_collection = db.collection('trials')
+	
+	app.use(express.static(__dirname));
 
-	// var database = require(__dirname + '/js/database')
-	// var connection = mysql.createConnection({
-	// 	host		: configs.mysql_host,
-	// 	user		: configs.mysql_user,
-	// 	password	: configs.mysql_password,
-	// 	database	: configs.mysql_password
-	// })
-}
+	app.get(/^(.+)$/, function(req, res){
+	     console.log('static file request : ' + req.params);
+	     console.log("ACCESS: " + req.params[0])
+	     res.sendFile(__dirname + req.params[0])
+	 });
 
-app.use(express.static(__dirname));
 
-app.get(/^(.+)$/, function(req, res){
-     console.log('static file request : ' + req.params);
-     console.log("ACCESS: " + req.params[0])
-     res.sendFile(__dirname + req.params[0])
- });
+	var fnnsp = io.of('/function-nsp')
+	fnnsp.on('connection', function(socket){
+		//things to do on connection
+		//	* assign condition
+		//	* assign chain and generation
 
-//namespace for assigning experiment parameters
-var expnsp = io.of('/experiment-nsp')
-// this is run when the client is detected
-// CONDITION ASSIGNMENT
-//  IN THIS SITUATION, THIS IS CHAIN & GEN ASSIGNMENT
-expnsp.on('connection', function(socket){
+		// for max chain val
+		//newestChain:
+		chain_collection.find().toArray(function(err, docs){
+			assert.equal(null, err)
+			var newestChain = docs
+			newestChain.sort({chain:-1}).limit(1)
+			var nextChain = newestChain.chain + 1
+			var outOfChains = (newestChain == nChains) //will this all work???
+			chain_collection.aggregate(
+				[
+					{
+						$match:
+							{'genInProgress': false},
+							{'chainInProgress': true}
+					},
+					{
+						$group:
+							{_id: "$chain", maxGen: { $max: "$gen" }}
+					}
+				],
+				function(err, results){
+					assert.equal(null, err)
+					var nextGens = results
+					var participantMustWait = (!nextGens && outOfChains)
+					//longestRunningGen:
+					chain_collection.aggregate(
+						[
+							{$match: {'chainInProgress': true}, {'genInProgress': true}},
+							{$group: {_id: "$chain", time: { $max: "$startTime" } }}
+						],
+						function(err, res){
+							assert.equal(null, err)
+							var longestRunningGen = res
+							//the rest of the chain assignment logic should be able to go in here...
 
-  // TO DO
-	// proper handling of start time
-	// figure out waiting situation,
-	// icing: estimate wait time for next participant and display
+							// CHAIN ASSINGNMENT LOGIC
+							// if nextGens exists, we assign the incoming participant to the chain closest to completion
+							// could imagine other schemes (e.g., the chain furthest from completion);
 
-  // WARNING:
-  // currently, i'm making MongoDB queries (without callbacks, which are required)
-  // and pretending like I can store the results in a new variable
-  // i don't believe this is actually possible.
-  // instead, we may have to do all this logic and new assignment within callbacks
+							// if nextGens DOESNT exist (if there are no chains in progress that have a ready slot):
+							// then make a new chain (if we can)
+							// otherwise, assign the participant to the chain that's been running the longest
+							// in this case, they would have to wait, so we emit the previous gen's data/language when ready
 
-  // http://stackoverflow.com/questions/35192122/how-do-i-store-a-mongodb-query-result-in-a-variable
-  // https://github.com/mongodb/node-mongodb-native#find-all-documents
-
-	// for max chain val
-	var newestChain = chain_collection.find().sort({chain:-1}).limit(1)
-	var nextChain = newestChain.chain + 1;
-	// have we run out of chains?
-	var outOfChains = newestChain == nChains;
-
-	// or
-	// var newestChain = chain_collection.aggregate(
-	//    [{$group: { _id: "$chain", maxChain: { $max: "$chain" } }}]
-	//  );
-
-	// of the chains that are NOT finished (chainInProgress: true) and
-	// don't currently have a gen running (genInProgress: false)
-	// find the maximum generation
-	var nextGens = chain_collection.aggregate(
-   [
-		 {
-			 $match:
-				 {'genInProgress': false},
-				 {'chainInProgress': true}
-		 },
-     {$group: { _id: "$chain", maxGen: { $max: "$gen" } }}
-   ]
- );
-
- 	var participantMustWait = (!nextGens && outOfChains);
-
-	// the generation that's been running the longest
-	// only run under certain conditions
-	var longestRunningGen = chain_collection.aggregate(
-		 [
-			 {$match: {'chainInProgress': true}, {'genInProgress': true} },
-			 {$group: { _id: "$chain", time: { $max: "$startTime" } }}
-		 ]
-	 );
-
-	 // CHAIN ASSINGNMENT LOGIC
-	// if nextGens exists, we assign the incoming participant to the chain closest to completion
-	// could imagine other schemes (e.g., the chain furthest from completion);
-
-	// if nextGens DOESNT exist (if there are no chains in progress that have a ready slot):
-	// then make a new chain (if we can)
-	// otherwise, assign the participant to the chain that's been running the longest
-	var lastGenInChain = nextGens ? _.max(nextGens, "gen") :
+							var lastGenInChain = nextGens ? _.max(nextGens, "gen") :
 										outOfChains ? longestRunningGen :
 										-1;
 
 
-	var chain = nextGens ? lastGenInChain.chain :
-						outOfChains ? longestRunningGen.chain :
-						nextChain;
+							var chain = nextGens ? lastGenInChain.chain :
+												outOfChains ? longestRunningGen.chain :
+												nextChain;
 
-	var condition = nextGens ? lastGenInChain.condition :
-						outOfChains ? longestRunningGen.chain :
-						assignCondition();
+							var condition = nextGens ? lastGenInChain.condition :
+												outOfChains ? longestRunningGen.chain :
+												assignCondition();
 
-	// is this the last generation in the chain
-	var chainInProgress = lastGenInChain.gen + 1 < nGenPerChain;
+							// is this the last generation in the chain
+							var chainInProgress = lastGenInChain.gen + 1 < nGenPerChain;
 
-	chain_collection.insert({
-		gen: lastGenInChain.gen + 1, // increment gen counter
-		chain: chain, // same chain as lastGenInChain
-		genInProgress: true, // so that the next participant doesn't get assigned to this same position
-		chainInProgress: chainInProgress // is this the end of the chain
-	})
+							// chains collection contains documents that look like:
+							// {gen: 4, chain: 2, genInProgress: false, chainInProgress: true, workerid: workerid, condition: condition, startTime: time}
+							//we need to get the workerID from the client, then store it in this chain and assign a condition
+							socket.emit('workerID request')
+							socket.on('workerID', function(workerID){
+								var assignCondition = function(chain){
+									//idea:
+									//query the chain_collection for this chain, check condition in chain
+									//if new chain, then assign condition somehow (balance it?)
+								}
+								var condition = assignCondition()
+								var new_chain = {
+									gen: lastGenInChain.gen + 1,
+									chain: chain,
+									genInProgress: true,
+									chainInProgress: chainInProgress,
+									workerid: workerID,
+									condition: condition,
+									startTime: getTimestamp()
+								}
+							})
+							chain_collection.insert({
+								gen: lastGenInChain.gen + 1, // increment gen counter
+								chain: chain, // same chain as lastGenInChain
+								genInProgress: true, // so that the next participant doesn't get assigned to this same position
+								chainInProgress: chainInProgress, // is this the end of the chain
 
-  // IF FIRST GEN: GENERATE RANDOM DATA FROM TRUE FUNCTION
-	var dataToPass = messages_collection.find({gen: lastGenInChain.gen, chain: chain}).message
+							})
 
+						  // IF FIRST GEN: GENERATE RANDOM DATA FROM TRUE FUNCTION
+						  //depending on condition, we then send corresponding data to the new participant
 
-	var assignCondition = function(){
-		//code for determining the condition of the experiment
-		// TO DO: counterbalance by chains
-		var condition = _.sample(['language', 'data_incidental']) //
-		// send the client "condition var"
-	}
+							var condition = assignCondition()
+							var dataToPass = messages_collection.find({gen: lastGenInChain.gen, chain: chain}).message
 
-	socket.emit('dataPass', dataToPass);
+							socket.emit('dataPass', dataToPass);
+						}
+					)
+				}
+			)
 
-})
-
-var gamensp = io.of('/game-nsp')
-gamensp.on('connection', function(socket){
-
-	var hs = socket.handshake
-	var query = require('url').parse(socket.handshake.headers.referer, true).query
-	var condition = (query.condition) ? query.condition : 'a' //try to pull condition from url, if fail --> default to 'a'
-	var user = (query.workerId) ? query.workerId : 'undefinedID'
-
-	var inventory = {
-		pocket: 'empty',
-		apples: 0,
-		fishes: 0
-	}
-
-	console.log("Connection from user: " + user + ".")
-
-	if (use_db) {
-		database.addPlayer(user, condition)
-
-	}
-
-	//function for updating database
-	var updateDB = function(action){
-		if(use_db){
-			database.updatePlayer(user, condition, action, inventory.pocket, inventory.apples, inventory.fishes)
-		}
-	}
-
-	collection.insert([user1, user2, user3], function (err, result) {
-		 if (err) {
-			 console.log(err);
-		 } else {
-			 console.log('Inserted %d documents into the "users" collection. The documents inserted with "_id" are:', result.length, result);
-		 }
-		 //Close connection
-		 db.close();
-	 })
-
-
-	//counts down until time_to_play has run out
-	var timer = function(seconds){
-		setTimeout(function(){
-			if (seconds >= 1){
-				timer(seconds - 1)
+		var assignCondition = function(){
+			//code for determining the condition of the experiment
+			// TO DO: counterbalance by chains
+			var condition = _.sample(['language', 'data_incidental']) //
+			if(condition == 'language'){
+				//query the language result, send it along
 			}else{
-				var destination = '/exitsurvey.html'
-				socket.emit('redirect', destination)
-				console.log("redirecting " + user)
+				//query
 			}
-		}, 1000)
-	}
-
-	timer(time_to_play)
-
-	socket.on('action', function(action){
-		if(action == 'get apple'){
-			inventory.apples += 1
-		}else if(action == 'shoot apple'){
-			inventory.apples -= 1
-		}else if(action == 'get rock'){
-			inventory.pocket = 'rock'
-		}else if(action == 'shoot rock'){
-			inventory.pocket = 'empty'
+			socket.emit('condition')
+			// send the client "condition var"
 		}
 
-		if(use_db){
-			updateDB(action)
-		}
-	});
+		socket.on('trial', function(trial_data){
+			//handle trial data by putting in db
+			//have the trial data packaged on client side
+			trials_collection.insert(trial_data, function(err, result){
+				if(err){
+					console.log("Error:", err)
+				}else{
+					console.log("Inserted %d documents", result.length)
+				}
+			})
+		})
 
-	var exportCSV = function(){
-		//function for exporting CSVs goes here
-	}
+		socket.on('language', function(language_data){
+			//again, have language_data packaged on client side
+			language_collection.insert(language_data, function(err, result){
+				if(err){
+					console.log("Error:", err)
+				}else{
+					console.log("Inserted %d documents", result.length)
+				}
+			})
+		})
 
-	socket.on('discconect', function(){
-		exportCSV()
 	})
-})
 
-server.listen(port, function(){
-	console.log("Game server listening port " + port + ".")
-	if(use_db){
-		console.log("Logging results in mongo database.")
-	}
-})
+	server.listen(port, function(){
+		console.log("Server listening port " + port + ".")
+		if(use_db){
+			console.log("Logging results in mongo database.")
+		}
+	})
+}
+
