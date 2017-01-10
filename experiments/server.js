@@ -71,7 +71,6 @@ var main = function(db){
 	var chain_collection = db.collection('chains')
 	var data_collection = db.collection('data')
 	var language_collection = db.collection('language')
-	var trials_collection = db.collection('trials')
 	
 	app.use(express.static(__dirname));
 
@@ -92,10 +91,9 @@ var main = function(db){
 		//newestChain:
 		chain_collection.find().toArray(function(err, docs){
 			assert.equal(null, err)
-			var newestChain = docs
-			newestChain.sort({chain:-1}).limit(1)
+			var newestChain = docs.sort({chain:-1}).limit(1)
 			var nextChain = newestChain.chain + 1
-			var outOfChains = (newestChain == nChains) //will this all work???
+			var outOfChains = (newestChain == nChains) //this is true if the chain we just pulled is the nth chain
 			chain_collection.aggregate(
 				[
 					{
@@ -143,24 +141,63 @@ var main = function(db){
 
 							var condition = nextGens ? lastGenInChain.condition :
 												outOfChains ? longestRunningGen.chain :
-												assignCondition();
+												'undefined';
+							//if condition is not predetermined, we determine it by balancing
+							if(condition == 'undefined'){
+								chain_collection.aggregate(
+									[
+										{
+											$match:
+												{'condition': 'language'}
+										},
+										{
+											$group:
+												{_id: "$chain", num_chains: { $sum: 1}}
+										}
+									], 
+									function(err, results){
+										if(err){
+											console.log("Error matching for condition 'language':", err)
+										}else{
+											var language_count = results.length
+											chain_collection.aggregate(
+											[
+												{
+													$match:
+														{'condition': 'data_incidental'}
+												},
+												{
+													$group:
+														{_id: "$chain", num_chains: { $sum: 1}}
+												}
+											], function(err, results){
+												if(err){
+													console.log("Error for matching condition 'data_incidental':", err)
+												}else{
+													var data_incidental_count = results.length
+													if(language_count > data_incidental_count){
+														condition = 'data_incidental'
+													}else{
+														condition = 'language'
+													}
+												}
+											})
+										}
+									}
+								)
+							}
 
 							// is this the last generation in the chain
 							var chainInProgress = lastGenInChain.gen + 1 < nGenPerChain;
 
 							// chains collection contains documents that look like:
 							// {gen: 4, chain: 2, genInProgress: false, chainInProgress: true, workerid: workerid, condition: condition, startTime: time}
-							//we need to get the workerID from the client, then store it in this chain and assign a condition
+
+							//we need to get the workerID from the client, then store it in this chain and assign the client its condition/give it data
 							socket.emit('workerID request')
 							socket.on('workerID', function(workerID){
-								var assignCondition = function(chain){
-									//idea:
-									//query the chain_collection for this chain, check condition in chain
-									//if new chain, then assign condition somehow (balance it?)
-								}
-								var condition = assignCondition()
 								var new_chain = {
-									gen: lastGenInChain.gen + 1,
+									gen: (lastGenInChain == -1) ? 0 : lastGenInChain.gen + 1,
 									chain: chain,
 									genInProgress: true,
 									chainInProgress: chainInProgress,
@@ -168,48 +205,64 @@ var main = function(db){
 									condition: condition,
 									startTime: getTimestamp()
 								}
+								chain_collection.insert(new_chain, function(err, results){
+									if(err){
+										console.log("Error inserting new worker:", err)
+									}else{
+										console.log("Inserted new worker", workerID)
+										//send along data/language to new worker if they're not the 0th in their chain
+										if (lastGenInChain != -1){
+											if(condition == 'language'){
+												//get the language, send it along
+												language_collection.find({gen: lastGenInChain.gen, chain: chain}, function(err, cursor){
+													if(err){
+														console.log("error querying language from previous gen:", err)
+													}else{
+														cursor.toArray(function(err, results){
+															//debugging pro strats: this should be length one or we've got duplicates in the db for messages from chain & gen
+															assert.equal(1, results.length)
+															socket.emit('assignment', {condition: condition, data: results[0].message})
+														})
+													}
+												})
+												socket.emit('assignment', {condition: condition, data: language_to_pass})
+											}else if(condition == 'data_incidental'){
+												data_collection.aggregate(
+													[
+														{$match: {chain: chain}, {generation: lastGenInChain.gen}},
+														{$group: //come back to this
+													],
+													function(err, results){
+														if(err){
+															console.log("error collecting previous data:", err)
+														}else{
+															socket.emit('assignment', {condition: condition, data: results})
+														}
+													}
+												)
+											}
+										}else{
+											//new in chain? generate random data from true function, happens on client side when data list is empty
+											socket.emit('assignment', {condition: condition, data: []})
+										}
+									}
+								})
 							})
-							chain_collection.insert({
-								gen: lastGenInChain.gen + 1, // increment gen counter
-								chain: chain, // same chain as lastGenInChain
-								genInProgress: true, // so that the next participant doesn't get assigned to this same position
-								chainInProgress: chainInProgress, // is this the end of the chain
-
-							})
-
-						  // IF FIRST GEN: GENERATE RANDOM DATA FROM TRUE FUNCTION
-						  //depending on condition, we then send corresponding data to the new participant
-
-							var condition = assignCondition()
-							var dataToPass = messages_collection.find({gen: lastGenInChain.gen, chain: chain}).message
-
-							socket.emit('dataPass', dataToPass);
 						}
 					)
 				}
 			)
+		})
+		//^^ double check that these all match...
 
-		var assignCondition = function(){
-			//code for determining the condition of the experiment
-			// TO DO: counterbalance by chains
-			var condition = _.sample(['language', 'data_incidental']) //
-			if(condition == 'language'){
-				//query the language result, send it along
-			}else{
-				//query
-			}
-			socket.emit('condition')
-			// send the client "condition var"
-		}
-
-		socket.on('trial', function(trial_data){
+		socket.on('data', function(trial_data){
 			//handle trial data by putting in db
 			//have the trial data packaged on client side
-			trials_collection.insert(trial_data, function(err, result){
+			data_collection.insert(trial_data, function(err, result){
 				if(err){
 					console.log("Error:", err)
 				}else{
-					console.log("Inserted %d documents", result.length)
+					console.log("Inserted %d documents into data collection", result.length)
 				}
 			})
 		})

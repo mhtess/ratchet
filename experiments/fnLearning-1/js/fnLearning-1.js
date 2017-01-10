@@ -10,6 +10,35 @@
 // 	exp.training_stims = dataToPass;
 // });
 
+function param( param ) { 
+    param = param.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
+    var regexS = "[\\?&]"+param+"=([^&#]*)"; 
+    var regex = new RegExp( regexS ); 
+    var tmpURL = window.location.href
+    var results = regex.exec( tmpURL ); 
+    console.log("param: " + param + ", URL: " + tmpURL)
+    if( results == null ) { 
+        return ""; 
+    } else { 
+        return results[1];    
+    } 
+}
+
+socket.on('workerID request', function(){
+  var workerId = param('workerID')
+  socket.emit('workerID', workerId)
+})
+
+socket.on('assignment', function(assignment_packet){
+  exp.condition = assignment_packet.condition
+  if(assignment_packet.data == []){
+    exp.training_stims = //generate new ones
+  }else{
+    exp.training_stims = assignment_packet.data
+    //copy that data over
+  }
+})
+
 var functionsToLearn = {
   "y=1-x": function(x){return 1 - x},
   "y=x" : function(x){ return x},
