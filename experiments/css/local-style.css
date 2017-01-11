@@ -54,11 +54,18 @@
     text-align: right;
 }
 
+.treeBox {
+    position: relative;
+}
 
 #vslider0_train {
+  position: absolute;
+  top: 90px;
+  left: 165px;
   float: bottom;
   max-width: 100px;
 }
+
 #vslider1_train {
   float: bottom;
   max-width: 100px;
