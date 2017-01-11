@@ -177,14 +177,19 @@ function make_slides(f) {
       $(".vertical_question").html(verticalQuestion);
       $("#sliders_train").empty();
 
-      $("#sliders_train").append("<td><svg id='svg_bug_train'></svg></td><td class='blank'></td>");
-      $("#sliders_train").append("<td><svg id='svg_tree_train'></svg></td>");
-      $("#sliders_train").append('<td class="slider_endpoint_labels"> \
-                    <div class="top">top   </div> \
-                    <div class="bottom">bottom</div>\
-                </td>');
-      $("#sliders_train").append("<td id='slider_col_train'><div id='vslider0_train' class='vertical_slider'>|</div></td>");
-      $("#sliders_train").append("<td id='slider_col1_train'><div id='vslider1_train' class='vertical_slider'>|</div></td>");
+      var bugsAndTrees ="<td><svg id='svg_bug_train'></svg>"+
+      "</td><td class='blank'></td>" +
+      "<td><div class='treeBox'><svg id='svg_tree_train'></svg>" +
+      // "<td class='slider_endpoint_labels'>" +
+      // "<div class='top'>top</div> "+
+      // "<div class='bottom'>bottom</div></td>"+
+      // "<td id='slider_col_train'>"+
+      "<div id='vslider0_train' class='vertical_slider'>|</div></div>"+
+      "</td><td id='slider_col1_train'>"+
+      "<div id='vslider1_train' class='vertical_slider'>|</div></td>"
+
+      $("#sliders_train").append(bugsAndTrees);
+    
       $("#slider_col1_train").hide();
       var scale = 1;
 
