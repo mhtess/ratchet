@@ -24,21 +24,6 @@ function param( param ) {
     }
 }
 
-socket.on('workerID request', function(){
-  var workerId = param('workerID')
-  socket.emit('workerID', workerId)
-})
-
-socket.on('assignment', function(assignment_packet){
-  exp.condition = assignment_packet.condition
-  if(assignment_packet.data == []){
-    exp.training_stims = //generate new ones
-  }else{
-    exp.training_stims = assignment_packet.data
-    //copy that data over
-  }
-})
-
 var functionsToLearn = {
   "y=1-x": function(x){return 1 - x},
   "y=x" : function(x){ return x},
@@ -50,6 +35,10 @@ var makeDataPoint = function(fn){
   var y = fn(x);
   return {x, y}
 };
+
+socket.on('workerID request', function(){
+  socket.emit('workerID', param("workerID"))
+})
 
 var color ="#316C0B";
 
@@ -87,6 +76,31 @@ function make_slides(f) {
       exp.startT = Date.now();
      }
   });
+
+  slides.lobby = slide({
+    name: "lobby",
+    start: function(){
+      socket.emit('request data', param('workerID'))
+      socket.on('assignment', function(assignment_packet){
+        exp.condition = assignment_packet.condition
+        if(assignment_packet.data == [] || exp.condition == 'language'){  
+          //if we're the firs gen, we won't receive anything so we generate new things
+          //additionally, if we're in language condition, we sample randomly from the true fn
+          exp.training_stims = _.range(0, exp.nTrainingTrials).map(
+            function(x){ return makeDataPoint(functionsToLearn[exp.targetFn]) }
+          )
+          if(exp.condition == 'language'){
+            exp.structure[2] = 'language_instructions' //use the language instructions slide instead of the regular instructions slide
+            exp.posteriorMessage = assignment_packet.data[0]
+          }
+        }else{
+          //otherwise, we're in the data_incidental condition and use the given data
+          exp.training_stims = assignment_packet.data
+        }
+        exp.go()
+      })
+    }
+  })
 
   slides.instructions = slide({
     name : "instructions",
@@ -150,8 +164,8 @@ function make_slides(f) {
 
       var verticalQuestion;
       if (exp.condition == "language"){
-        verticalQuestion = "Different sized bugs live at different heights on the tree.<br> The last scientist on the island left you the following message:"+
-        // TODO: INPUT PREVIOUS MESSAGE
+        verticalQuestion = "Different sized bugs live at different heights on the tree.<br> The last scientist on the island left you the following message: "+
+        exp.posteriorMessage
         +
         "<br>For this bug on the left, how high on the tree does it live?"
       } else {
@@ -245,8 +259,8 @@ function make_slides(f) {
 
       var verticalQuestion;
       if (exp.condition == "language"){
-        verticalQuestion = "Different sized bugs live at different heights on the tree.<br> The last scientist on the island left you the following message:"+
-        // TODO: INPUT PREVIOUS MESSAGE
+        verticalQuestion = "Different sized bugs live at different heights on the tree.<br> The last scientist on the island left you the following message: "+
+        exp.posteriorMessage
         +
         "<br>For this bug on the left, how high on the tree does it live?"
       } else {
@@ -344,6 +358,7 @@ function make_slides(f) {
 function init() {
   exp.nTrainingTrials = 3;
   exp.nTestTrials = 2;
+  exp.receivedData = false;
 
   exp.trials = [];
   exp.catch_trials = [];
@@ -354,9 +369,6 @@ function init() {
   // n random selected x-values
 
   // this is effectively repeat randomly drawing x,y pairs consistent with the function
-  exp.training_stims = _.range(0, exp.nTrainingTrials).map(
-    function(x){ return makeDataPoint(functionsToLearn[exp.targetFn]) }
-  )
   exp.test_stims = _.range(0, exp.nTestTrials).map(
     function(x){
        return makeDataPoint(functionsToLearn[exp.targetFn])
@@ -378,6 +390,7 @@ function init() {
   //blocks of the experiment:
   exp.structure=[
     "i0",
+    "lobby",
     "instructions",
     "fn_learning_train",
     "intermediate_instructions",
