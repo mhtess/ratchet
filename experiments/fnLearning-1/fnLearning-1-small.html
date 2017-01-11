@@ -1,0 +1,245 @@
+<html>
+
+<head>
+    <title>Learning experiment</title>
+
+    <!--JS-->
+
+    <!-- external general utilities -->
+    <script src="../_shared/js/jquery-1.11.1.min.js "></script>
+    <script src="../_shared/full-projects/jquery-ui/jquery-ui.min.js"></script>
+    <script src="../_shared/js/underscore-min.js"></script>
+    <!-- if you want to draw stuff: -->
+    <script src="../_shared/js/raphael-min.js"></script>
+
+    <!-- cocolab experiment logic -->
+    <script src="../_shared/js/exp-V2.js"></script>
+    <script src="../_shared/js/stream-V2.js"></script>
+
+    <!-- cocolab general utilities -->
+    <script src="../_shared/js/mmturkey.js "></script>
+    <script src="../_shared/js/browserCheck.js"></script>
+    <script src="../_shared/js/utils.js"></script>
+    <!-- if you want to draw cute creatures (depends on raphael): -->
+    <script src="../_shared/critters/ecosystem.js"></script>
+    <!-- <script src="../_shared/js/ecosystem.js"></script> -->
+
+    <!-- experiment specific helper functions -->
+    <!-- <script src="js/local-utils.js"></script> -->
+
+    <!-- socket.io -->
+    <script src="../node_modules/socket.io/socket.io.js"></script>
+
+    <!--CSS-->
+    <link href="../_shared/full-projects/jquery-ui/jquery-ui.min.css" rel="stylesheet" type="text/css"/>
+    <link href="../_shared/css/cocolab-style.css" rel="stylesheet" type="text/css"/>
+    <link href="../css/local-style.css" rel="stylesheet" type="text/css"/>
+
+    <!-- experiment file -->
+    <script src="js/fnLearning-1-small.js"></script>
+    <script>
+    var socket = io('/function-nsp')
+
+    function sendTrial(trial){
+      socket.emit('trial', trial)
+    }
+    </script>
+
+</head>
+
+<body onload="init();">
+  <noscript>This task requires JavaScript.</noscript>
+
+  <div class="slide" id="i0" >
+    <img src="../_shared/images/cocologo.png" alt="Stanford CoCoLab" id="cocologo"></img>
+    <p id="cocolab">Stanford CoCoLab</p>
+    <p id="instruct-text">You will play a simple learning game. The HIT should take ~<span id="timeMinutes">{{}}</span> minutes. Please pay attention, thanks!</p>
+    <button id="start_button" type="button">Start Experiment</button>
+    <p id="legal">Legal information: By answering the following questions, you are participating in a study being performed by cognitive scientists in the Stanford Department of Psychology. If you have questions about this research, please contact MH Tessler at <a href="mailto://mtessler@stanford.edu">mtessler@stanford.edu</a> or Noah Goodman, at ngoodman@stanford.edu. You must be at least 18 years old to participate. Your participation in this research is voluntary. You may decline to answer any or all of the following questions. You may decline further participation, at any time, without adverse consequences. Your anonymity is assured; the researchers who have requested your participation will not receive any personal information about you.</p>
+  </div>
+
+  <div class="slide" id="lobby">
+    <h3>Please Wait</h3>
+    <p>
+      Please excuse us while we wait for data to be generated - this should only take a moment
+    </p>
+  </div>
+
+  <div class="slide" id="instructions">
+      <h3>Instructions</h3>
+      <p>
+        In this experiment, we want you to imagine you're a scientist on a far-away island.
+        On this island, there is one very tall tree where all bugs live.
+        It turns out: <strong>different sized bugs live at different heights on the tree.</strong>
+        Your job is to figure out which sized bugs live on which heights of the tree. </p>
+      <p>
+        First, you will go through an exploration phase.
+        You'll be given a bug of a certain size and you can guess how high on the tree it should be.
+        After you guess, you will be shown where the bug actually lives.
+        To continue, you must adjust the slider to match the correct answer.
+        There are <span class="trainingTrials">{{}}</span> exploration trials.
+      </p>
+      <p>
+        After the exploration phase, you will be asked to provide your best guess to similar questions based on what you've learned.
+        It will be the same as the exploration phase except you will <strong>not</strong> be shown where the bug actually lives.
+        There will be <span class="testTrials">{{}}</span> of these trials.
+      </p>
+      <p>When you're ready to go to the exploration phase, press the "Continue" button below.</p>
+      <button onclick="_s.button()">Continue</button>
+  </div>
+
+  <div class="slide" id="intermediate_instructions">
+      <h3>Intermediate instructions</h3>
+      <p>
+        Congratulations on completing the exploration phase.
+        In the next phase, you will be shown a bug of a certain size and asked how high on the tree it lives.
+        There are <span class="testTrials">{{}}</span> of these trials.
+      </p>1
+      <p>When you're ready to go to the test phase, press the "Continue" button below.</p>
+      <button onclick="_s.button()">Continue</button>
+  </div>
+
+  <div class="slide" id="fn_learning_test">
+    <p class="passedMessage"></p>
+    <p class="vertical_question">{{}}</p>
+    <table id="vertical_slider_table" class="slider_table">
+      <tbody>
+        <tr class="sliders">
+        </tr>
+      </tbody>
+    </table>
+    <button onclick="_s.button()">Continue</button>
+    <div class="err">Please adjust the slider before continuing.</div>
+  </div>
+
+  <div class="slide" id="fn_learning_train">
+    <p class="passedMessage"></p>
+    <p class="vertical_question">{{}}</p>
+    <table id="vertical_slider_table_train" class="slider_table">
+      <tbody>
+        <tr id="sliders_train">
+        </tr>
+        <tr id="bin_labels">
+        </tr>
+      </tbody>
+    </table>
+    <button onclick="_s.button()">Continue</button>
+    <div class="err">Please adjust the slider before continuing.</div>
+    <div class="adjust">Please adjust your slider to match the correct height.</div>
+  </div>
+
+
+  <div class="slide" id="language_instructions">
+      <h3>Instructions</h3>
+      <p>
+        In this experiment, we want you to imagine you're a scientist on a far-away island.
+        On this island, there is one very tall tree where all bugs live.
+        It turns out: <strong>different sized bugs live at different heights on the tree.</strong>
+        Your job is to figure out which sized bugs live on which heights of the tree. </p>
+      <p>
+        First, you will go through an exploration phase.
+        You'll be given a bug of a certain size and you can guess how high on the tree it should be.
+        After you guess, you will be shown where the bug actually lives.
+        To continue, you must adjust the slider to match the correct answer.
+        There are <span class="trainingTrials">{{}}</span> exploration trials.
+      </p>
+      <p>
+        After the exploration phase, you will be asked to provide your best guess to similar questions based on what you've learned.
+        It will be the same as the exploration phase except you will <strong>not</strong> be shown where the bug actually lives.
+        There will be <span class="testTrials">{{}}</span> of these trials.
+      </p>
+      <p>
+        Finally, you are not alone in this endeavour.
+        You part of a long tradition of scientists on this island.
+        The last scientist to visit the island went through the same learning phases as you will.
+        They have left you a message about what they believe about the bugs in the trees based on what they learned from their own experience and from the scientist before them.
+        Their message will be visible to you throughout the entire experiment.
+      </p>
+      <p>When you're ready to go to the exploration phase, press the "Continue" button below.</p>
+      <button onclick="_s.button()">Continue</button>
+  </div>
+
+
+  <div class="slide" id="debrief">
+      <h3>Debrief</h3>
+      <p>
+        Thank you for completing both phases of the experiment.
+      </p>
+      <p id="messageElicitation"> </p>
+      <p>Press the "Continue" button below to complete a short questionnaire and finish the experiment.</p>
+      <button onclick="_s.button()">Continue</button>
+  </div>
+
+
+
+  <div class="slide"  id="subj_info">
+    <div class="long_form">
+      <div class="subj_info_title">Additional information</div>
+      <p class="info">Answering these questions is optional, but will help us understand your answers.</p>
+      <p>Did you read the instructions and do you think you did the HIT correctly?</p>
+      <label><input type="radio"  name="assess" value="No"/>No</label>
+      <label><input type="radio"  name="assess" value="Yes"/>Yes</label>
+      <label><input type="radio"  name="assess" value="Confused"/>I was confused</label>
+
+
+      <p>Were there any problems or bugs in the experiment?</p>
+      <textarea id="problems" rows="2" cols="50"></textarea>
+
+      <p>What do you think is a fair price for the work you did?</p>
+      <textarea id="fairprice" rows="1" cols="10"></textarea>
+
+
+      <p>Gender:
+        <select id="gender">
+          <label><option value=""/></label>
+          <label><option value="Male"/>Male</label>
+          <label><option value="Female"/>Female</label>
+          <label><option value="Other"/>Other</label>
+        </select>
+      </p>
+
+      <p>Age: <input type="text" id="age"/></p>
+
+      <p>Level Of Education:
+        <select id="education">
+          <label><option value="-1"/></label>
+          <label><option value="0"/>Some High School</label>
+          <label><option value="1"/>Graduated High School</label>
+          <label><option value="2"/>Some College</label>
+          <label><option value="3"/>Graduated College</label>
+          <label><option value="4"/>Hold a higher degree</label>
+        </select>
+      </p>
+
+      <p>Native Language: <input type="text" id="language"/></p>
+      <label>(the language(s) spoken at home when you were a child)</label>
+
+      <p>Did you enjoy the hit?</p>
+      <select id="enjoyment">
+        <label><option value="-1"></option></label>
+        <label><option value="0">Worse than the Average HIT</option></label>
+        <label><option value="1" >An Average HIT</option></label>
+        <label><option value="2">Better than average HIT</option></label>
+      </select>
+
+      <p>We would be interested in any comments you have about this experiment. Please type them here:</p>
+      <textarea id="comments" rows="3" cols="50"></textarea>
+      <br/>
+      <button onclick="_s.submit()">Submit</button>
+    </div>
+  </div>
+
+  <div id="thanks" class="slide js" >
+    <p  class="big">Thanks for your Time!</p>
+  </div>
+
+  <div class="progress">
+    <span>Progress:</span>
+    <div class="bar-wrapper">
+      <div class="bar" width="0%">
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
