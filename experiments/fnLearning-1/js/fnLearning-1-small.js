@@ -1,6 +1,6 @@
 
 // the following is commented to run locally:
-// var socket = io('/experiment-nsp');
+var socket = io('/function-nsp');
 
 // HERE, WE GET DATA FROM THE LAST PARTICIPANT IN CHAIN
 // WE NEED TO THINK ABOUT WHAT TO DO IF THIS IS DATA PTS VS. LANGUAGE
@@ -20,6 +20,7 @@ function param( param ) {
     if( results == null ) {
         return "";
     } else {
+        console.log('returning', results[1])
         return results[1];
     }
 }
@@ -27,7 +28,8 @@ function param( param ) {
 var functionsToLearn = {
   "y=1-x": function(x){return 1 - x},
   "y=x" : function(x){ return x},
-  "y=sin(x)": function(x){ return Math.sin(x*Math.PI)}
+  "y=sin(x)": function(x){ return Math.sin(x*Math.PI)},
+  "beppu": function(x){ return 4*Math.pow(x-0.5, 2)}
 };
 
 var makeDataPoint = function(fn){
@@ -35,11 +37,6 @@ var makeDataPoint = function(fn){
   var y = fn(x);
   return {x, y}
 };
-
-socket.on('workerID request', function(){
-  socket.emit('workerID', param("workerID"))
-})
-
 var color ="#316C0B";
 
 var bugProps = {
@@ -65,6 +62,27 @@ var treeProps =  {
   "col3":{"mean":color}
 }
 
+socket.on('workerID request', function(){
+  console.log('workerID was requested')
+  socket.emit('workerID', param("workerID"))
+})
+
+// socket.on('assignment', function(assignment_packet){
+//   console.log('received assignment')
+//   exp.condition = assignment_packet.condition
+//   console.log('condition assigned to', exp.condition)
+//   if(assignment_packet.data.length == 0 || exp.condition == 'language'){
+//     exp.training_stims = _.range(0, exp.nTrainingTrials).map(
+//       function(x){ return makeDataPoint(functionsTolearn[exp.targetFn]) }
+//     )
+//     if(exp.condition == 'language'){
+//       exp.posteriorMessage = assignment_packet.data[0]
+//     }
+//   }else{
+//     exp.training_stims =assignment_packet.data
+//   }
+// })
+
 function make_slides(f) {
   var slides = {};
 
@@ -82,15 +100,18 @@ function make_slides(f) {
     start: function(){
       socket.emit('request data', param('workerID'))
       socket.on('assignment', function(assignment_packet){
+        console.log('received data')
         exp.condition = assignment_packet.condition
-        if(assignment_packet.data == [] || exp.condition == 'language'){  
+        if(assignment_packet.data.length == 0 || exp.condition == 'language'){  
           //if we're the firs gen, we won't receive anything so we generate new things
           //additionally, if we're in language condition, we sample randomly from the true fn
+          console.log('new')
           exp.training_stims = _.range(0, exp.nTrainingTrials).map(
             function(x){ return makeDataPoint(functionsToLearn[exp.targetFn]) }
           )
+          console.log(exp.training_stims)
           if(exp.condition == 'language'){
-            exp.structure[2] = 'language_instructions' //use the language instructions slide instead of the regular instructions slide
+            // exp.structure[2] = 'language_instructions' //use the language instructions slide instead of the regular instructions slide
             exp.posteriorMessage = assignment_packet.data[0]
           }
         }else{
@@ -105,24 +126,28 @@ function make_slides(f) {
   slides.instructions = slide({
     name : "instructions",
     start: function() {
+      $(".language_instructions").hide();
       $(".trainingTrials").html(exp.training_stims.length);
       $(".testTrials").html(exp.test_stims.length);
+      if(exp.condition == 'language'){
+        $(".language_instructions").show();
+      }
     },
     button : function() {
       exp.go(); //use exp.go() if and only if there is no "present" data.
     }
   });
 
-  slides.language_instructions = slide({
-    name : "language_instructions",
-    start: function() {
-      $(".trainingTrials").html(exp.training_stims.length);
-      $(".testTrials").html(exp.test_stims.length);
-    },
-    button : function() {
-      exp.go(); //use exp.go() if and only if there is no "present" data.
-    }
-  });
+  // slides.language_instructions = slide({
+  //   name : "language_instructions",
+  //   start: function() {
+  //     $(".trainingTrials").html(exp.training_stims.length);
+  //     $(".testTrials").html(exp.test_stims.length);
+  //   },
+  //   button : function() {
+  //     exp.go(); //use exp.go() if and only if there is no "present" data.
+  //   }
+  // });
 
 
   slides.intermediate_instructions = slide({
@@ -141,12 +166,21 @@ function make_slides(f) {
       $(".trainingTrials").html(exp.training_stims.length);
       $(".testTrials").html(exp.test_stims.length);
 
-      exp.condition == "language" ?
-      $("#messageElicitation").html('In the box below, please describe what you believe is the relation between the size of the bug and the height on tree where it lives. This message will be shared with the next participant in order to help them learn. <textarea id="message" rows="2" cols="50"></textarea>');
+      if(exp.condition == 'language'){
+        $("#messageElicitation").html('In the box below, please describe what you believe is the relation between the size of the bug and the height on tree where it lives. This message will be shared with the next participant in order to help them learn. <textarea id="message" rows="2" cols="50"></textarea>');
+      }
+      // exp.condition == "language" ?
+      // $("#messageElicitation").html('In the box below, please describe what you believe is the relation between the size of the bug and the height on tree where it lives. This message will be shared with the next participant in order to help them learn. <textarea id="message" rows="2" cols="50"></textarea>');
 
     },
     button : function() {
       // TODO: SAVE MESSAGE THAT IS PASSED
+      console.log('sending message data')
+      var message = $("#message").val()
+      console.log('message:')
+      console.log(message)
+      socket.emit('language', {workerID: param('workerID'), message: message})
+      console.log('sent message data')
       exp.go();
     }
   });
@@ -365,7 +399,8 @@ function init() {
   exp.catch_trials = [];
 
   // exp.targetFn = _.sample(["y=1-x", "y=x", "y=sin(x)"])
-  exp.targetFn = "y=1-x";
+  // exp.targetFn = "y=1-x";
+  exp.targetFn = "beppu"
 
   // n random selected x-values
 

@@ -28,7 +28,7 @@
     <!-- <script src="js/local-utils.js"></script> -->
 
     <!-- socket.io -->
-    <script src="../node_modules/socket.io/socket.io.js"></script>
+    <script src="../socket.io/socket.io.js"></script>
 
     <!--CSS-->
     <link href="../_shared/full-projects/jquery-ui/jquery-ui.min.css" rel="stylesheet" type="text/css"/>
@@ -65,6 +65,29 @@
     </p>
   </div>
 
+  <!-- <div class="slide" id="instructions">
+      <h3>Instructions</h3>
+      <p>
+        In this experiment, we want you to imagine you're a scientist on a far-away island.
+        On this island, there is one very tall tree where all bugs live.
+        It turns out: <strong>different sized bugs live at different heights on the tree.</strong>
+        Your job is to figure out which sized bugs live on which heights of the tree. </p>
+      <p>
+        First, you will go through an exploration phase.
+        You'll be given a bug of a certain size and you can guess how high on the tree it should be.
+        After you guess, you will be shown where the bug actually lives.
+        To continue, you must adjust the slider to match the correct answer.
+        There are <span class="trainingTrials">{{}}</span> exploration trials.
+      </p>
+      <p>
+        After the exploration phase, you will be asked to provide your best guess to similar questions based on what you've learned.
+        It will be the same as the exploration phase except you will <strong>not</strong> be shown where the bug actually lives.
+        There will be <span class="testTrials">{{}}</span> of these trials.
+      </p>
+      <p>When you're ready to go to the exploration phase, press the "Continue" button below.</p>
+      <button onclick="_s.button()">Continue</button>
+  </div> -->
+
   <div class="slide" id="instructions">
       <h3>Instructions</h3>
       <p>
@@ -84,6 +107,13 @@
         It will be the same as the exploration phase except you will <strong>not</strong> be shown where the bug actually lives.
         There will be <span class="testTrials">{{}}</span> of these trials.
       </p>
+      <div class="language_instructions">
+        Finally, you are not alone in this endeavour.
+        You part of a long tradition of scientists on this island.
+        The last scientist to visit the island went through the same learning phases as you will.
+        They have left you a message about what they believe about the bugs in the trees based on what they learned from their own experience and from the scientist before them.
+        Their message will be visible to you throughout the entire experiment.
+      </div>
       <p>When you're ready to go to the exploration phase, press the "Continue" button below.</p>
       <button onclick="_s.button()">Continue</button>
   </div>
@@ -127,38 +157,6 @@
     <div class="err">Please adjust the slider before continuing.</div>
     <div class="adjust">Please adjust your slider to match the correct height.</div>
   </div>
-
-
-  <div class="slide" id="language_instructions">
-      <h3>Instructions</h3>
-      <p>
-        In this experiment, we want you to imagine you're a scientist on a far-away island.
-        On this island, there is one very tall tree where all bugs live.
-        It turns out: <strong>different sized bugs live at different heights on the tree.</strong>
-        Your job is to figure out which sized bugs live on which heights of the tree. </p>
-      <p>
-        First, you will go through an exploration phase.
-        You'll be given a bug of a certain size and you can guess how high on the tree it should be.
-        After you guess, you will be shown where the bug actually lives.
-        To continue, you must adjust the slider to match the correct answer.
-        There are <span class="trainingTrials">{{}}</span> exploration trials.
-      </p>
-      <p>
-        After the exploration phase, you will be asked to provide your best guess to similar questions based on what you've learned.
-        It will be the same as the exploration phase except you will <strong>not</strong> be shown where the bug actually lives.
-        There will be <span class="testTrials">{{}}</span> of these trials.
-      </p>
-      <p>
-        Finally, you are not alone in this endeavour.
-        You part of a long tradition of scientists on this island.
-        The last scientist to visit the island went through the same learning phases as you will.
-        They have left you a message about what they believe about the bugs in the trees based on what they learned from their own experience and from the scientist before them.
-        Their message will be visible to you throughout the entire experiment.
-      </p>
-      <p>When you're ready to go to the exploration phase, press the "Continue" button below.</p>
-      <button onclick="_s.button()">Continue</button>
-  </div>
-
 
   <div class="slide" id="debrief">
       <h3>Debrief</h3>
