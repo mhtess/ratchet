@@ -168,8 +168,14 @@ var main = function(db){
 													console.log("error querying data", err)
 												}else{
 													cursor.toArray(function(err, results){
-														console.log('emitting data for user, length', results.length)
-														socket.emit('assignment', {condition: condition, data: results})
+														//change results to required data
+														var data_to_send = results.map(function(this_doc){
+															var x = this_doc.stimulus
+															var y = this_doc.response
+															return {x, y}
+														})
+														console.log('emitting data for user, length', data_to_send.length)
+														socket.emit('assignment', {condition: condition, data: data_to_send})
 														deleteMinGen(minGen)
 													})
 												}
@@ -197,10 +203,12 @@ var main = function(db){
 
 		socket.on('data', function(trial_data){
 			//get gen and chain info etc
-			var trial = trial_data.trial
+			//{stimulus: this.stim.x, response: exp.sliderPost[0], workerID: param('workerID'), condition: exp.condition}
+			// var trial = ??
 			var stimulus = trial_data.stimulus
 			var response = trial_data.response
 			var workerID = trial_data.workerID
+			var condition = trial_data.condition
 			//we need condition, gen, chain
 			chain_collection.find({workerID: workerID}, function(err, cursor){
 				if(err){
@@ -211,13 +219,12 @@ var main = function(db){
 							console.log("err", err)
 						}else{
 							var doc = results[0]
-							var condition = doc.condition
 							var gen = doc.gen
 							var chain = doc.chain
 							var new_data_doc = {
 								gen: gen,
 								chain: chain,
-								trial: trial,
+								// trial: trial,
 								stimulus: stimulus,
 								response: response,
 								workerID: workerID,

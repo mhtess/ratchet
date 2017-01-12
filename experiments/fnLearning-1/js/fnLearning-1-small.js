@@ -67,30 +67,15 @@ socket.on('workerID request', function(){
   socket.emit('workerID', param("workerID"))
 })
 
-// socket.on('assignment', function(assignment_packet){
-//   console.log('received assignment')
-//   exp.condition = assignment_packet.condition
-//   console.log('condition assigned to', exp.condition)
-//   if(assignment_packet.data.length == 0 || exp.condition == 'language'){
-//     exp.training_stims = _.range(0, exp.nTrainingTrials).map(
-//       function(x){ return makeDataPoint(functionsTolearn[exp.targetFn]) }
-//     )
-//     if(exp.condition == 'language'){
-//       exp.posteriorMessage = assignment_packet.data[0]
-//     }
-//   }else{
-//     exp.training_stims =assignment_packet.data
-//   }
-// })
-
 function make_slides(f) {
   var slides = {};
 
   slides.i0 = slide({
      name : "i0",
      start: function() {
-       $("#timeMinutes").html(Math.round(
-       (exp.training_stims.length + exp.test_stims.length) / 6))
+       // $("#timeMinutes").html(Math.round(
+       // (exp.training_stims.length + exp.test_stims.length) / 6))
+        $("#timeMinutes").html('10')
       exp.startT = Date.now();
      }
   });
@@ -100,12 +85,12 @@ function make_slides(f) {
     start: function(){
       socket.emit('request data', param('workerID'))
       socket.on('assignment', function(assignment_packet){
-        console.log('received data')
         exp.condition = assignment_packet.condition
         if(assignment_packet.data.length == 0 || exp.condition == 'language'){  
           //if we're the firs gen, we won't receive anything so we generate new things
           //additionally, if we're in language condition, we sample randomly from the true fn
-          console.log('new')
+          console.log('received: here is the data')
+          console.log(assignment_packet.data)
           exp.training_stims = _.range(0, exp.nTrainingTrials).map(
             function(x){ return makeDataPoint(functionsToLearn[exp.targetFn]) }
           )
@@ -117,7 +102,9 @@ function make_slides(f) {
         }else{
           //otherwise, we're in the data_incidental condition and use the given data
           exp.training_stims = assignment_packet.data
+          console.log('training_stims = data, data_incidental condition')
         }
+        console.log('training data:', exp.training_stims.length)
         exp.go()
       })
     }
@@ -177,19 +164,16 @@ function make_slides(f) {
       // TODO: SAVE MESSAGE THAT IS PASSED
       console.log('sending message data')
       var message = $("#message").val()
-      console.log('message:')
-      console.log(message)
       socket.emit('language', {workerID: param('workerID'), message: message})
-      console.log('sent message data')
       exp.go();
     }
   });
-
 
   slides.fn_learning_train = slide({
     name : "fn_learning_train",
     present : _.shuffle(exp.training_stims),
     present_handle : function(stim) {
+      console.log("help")
       $(".err").hide();
       $(".adjust").hide();
 
@@ -206,19 +190,22 @@ function make_slides(f) {
         verticalQuestion = "Different sized bugs live at different heights on the tree.<br> For this bug on the left, how high on the tree does it live?"
       }
 
-
-
       $(".vertical_question").html(verticalQuestion);
       $("#sliders_train").empty();
 
-      $("#sliders_train").append("<td><svg id='svg_bug_train'></svg></td><td class='blank'></td>");
-      $("#sliders_train").append("<td><svg id='svg_tree_train'></svg></td>");
-      $("#sliders_train").append('<td class="slider_endpoint_labels"> \
-                    <div class="top">top   </div> \
-                    <div class="bottom">bottom</div>\
-                </td>');
-      $("#sliders_train").append("<td id='slider_col_train'><div id='vslider0_train' class='vertical_slider'>|</div></td>");
-      $("#sliders_train").append("<td id='slider_col1_train'><div id='vslider1_train' class='vertical_slider'>|</div></td>");
+      var bugsAndTrees ="<td><svg id='svg_bug_train'></svg>"+
+      "</td><td class='blank'></td>" +
+      "<td><div class='treeBox'><svg id='svg_tree_train'></svg>" +
+      // "<td class='slider_endpoint_labels'>" +
+      // "<div class='top'>top</div> "+
+      // "<div class='bottom'>bottom</div></td>"+
+      // "<td id='slider_col_train'>"+
+      "<div id='vslider0_train' class='vertical_slider'>|</div></div>"+
+      "</td><td id='slider_col1_train'>"+
+      "<div id='vslider1_train' class='vertical_slider'>|</div></td>"
+
+      $("#sliders_train").append(bugsAndTrees);
+    
       $("#slider_col1_train").hide();
       var scale = 1;
 
@@ -274,6 +261,7 @@ function make_slides(f) {
       };
     },
     log_responses : function() {
+      //send data to server
       exp.data_trials.push({
         "trial_type" : "fnLearning_training",
         "input" : this.stim.x,
@@ -300,10 +288,9 @@ function make_slides(f) {
       } else {
         verticalQuestion = "Different sized bugs live at different heights on the tree.<br> For this bug on the left, how high on the tree does it live?"
       }
+      $(".vetical_question").html(verticalQuestion)
 
       $(".sliders").empty();
-
-
 
       $(".sliders").append("<td><svg id='svg_bug'></svg></td><td id='blank'></td>");
       $(".sliders").append("<td><svg id='svg_tree'></svg></td>");
@@ -347,6 +334,8 @@ function make_slides(f) {
         "true_output" : this.stim.y,
         "response" : exp.sliderPost[0]
       });
+      console.log('sending server response data')
+      socket.emit('data', {stimulus: this.stim.x, response: exp.sliderPost[0], workerID: param('workerID'), condition: exp.condition})
     },
   });
 
