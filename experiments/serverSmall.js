@@ -44,7 +44,7 @@ try {
 
 var mongodb = require('mongodb')
 var MongoClient = mongodb.MongoClient
-var url = 'mongodb://superAdmin:admin123@localhost:27017/test?authSource=admin';
+var url = 'mongodb://superAdmin:admin123@localhost:27018/test?authSource=admin';
 var db
 MongoClient.connect(url, function(err, database){
 	if(err){
@@ -165,24 +165,8 @@ var main = function(db){
 													deleteMinGen(minGen)
 												}
 											})
-											// })
-											// language_collection.find({gen: minGen.gen, chain: minGen.chain}, function(err, cursor){
-											// 	if(err){
-											// 		console.log("error querying language", err)
-											// 	}else{
-											// 		cursor.toArray(function(err, results){
-											// 			console.log('results.length: ', results.length)
-											// 			console.log('message: ', results[0].message)
-											// 			console.log('message doc: ')
-											// 			console.log(results[0])
-											// 			console.log('emitting language for user', results[0].message)
-											// 			socket.emit('assignment', {condition: condition, data: results[0].message, gen: minGen.gen + 1, chain: minGen.chain})
-											// 			deleteMinGen(minGen)
-											// 		})
-											// 	}
-											// })
 										}else{
-											data_collection.find({gen: minGen.gen, chain: chain}, function(err, cursor){
+											data_collection.find({gen: minGen.gen, chain: minGen.chain}, function(err, cursor){
 												if(err){
 													console.log("error querying data", err)
 												}else{
