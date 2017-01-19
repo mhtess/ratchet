@@ -57,8 +57,8 @@ MongoClient.connect(url, function(err, database){
 })	
 
 var main = function(db){
-	server.listen(3000)
-	console.log("listening on port 3000")
+	server.listen(4343)
+	console.log("listening on port 4343")
 	var chain_collection = db.collection('chains')
 	var data_collection = db.collection('data')
 	var language_collection = db.collection('language')
@@ -252,7 +252,7 @@ var main = function(db){
 				gen: language_data.gen,
 				chain: language_data.chain,
 				message: language_data.message,
-				workerID: language_data.workerID
+				workerID: language_data.workerId
 			}
 			language_collection.insertOne(new_language_doc, function(err, results){
 				if(err){

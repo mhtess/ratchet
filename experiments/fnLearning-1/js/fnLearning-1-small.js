@@ -51,7 +51,7 @@ var treeProps =  {
 }
 
 socket.on('workerID request', function(){
-  socket.emit('workerID', param("workerID"))
+  socket.emit('workerID', param("workerId"))
 })
 
 function make_slides(f) {
@@ -68,7 +68,7 @@ function make_slides(f) {
   slides.lobby = slide({
     name: "lobby",
     start: function(){
-      socket.emit('request data', param('workerID'))
+      socket.emit('request data', param('workerId'))
       socket.on('assignment', function(assignment_packet){
         exp.condition = assignment_packet.condition
         exp.gen = assignment_packet.gen
@@ -140,9 +140,9 @@ function make_slides(f) {
         if(message == ''){
           $(".err").show()
         }else{
-          var workerID = param('workerID')
+          var workerID = param('workerId')
           console.log("workerID", workerID)
-          socket.emit('language', {workerId: param('workerID'), message: message, gen: exp.gen, chain: exp.chain})
+          socket.emit('language', {workerId: param('workerId'), message: message, gen: exp.gen, chain: exp.chain})
           exp.go()
         }
       }else{
@@ -315,7 +315,7 @@ function make_slides(f) {
         "true_output" : this.stim.y,
         "response" : exp.sliderPost[0]
       });
-      socket.emit('data', {gen: exp.gen, chain: exp.chain, stimulus: this.stim.x, response: exp.sliderPost[0], workerID: param('workerID'), condition: exp.condition})
+      socket.emit('data', {gen: exp.gen, chain: exp.chain, stimulus: this.stim.x, response: exp.sliderPost[0], workerID: param('workerId'), condition: exp.condition})
     },
   });
 
@@ -342,7 +342,7 @@ function make_slides(f) {
   slides.thanks = slide({
     name : "thanks",
     start : function() {
-      socket.emit('complete', param('workerID')) //tell the server that this generation is no longer in progress
+      socket.emit('complete', param('workerId')) //tell the server that this generation is no longer in progress
       exp.data= {
           "trials" : exp.data_trials,
           "catch_trials" : exp.catch_trials,
@@ -360,8 +360,8 @@ function make_slides(f) {
 
 /// init ///
 function init() {
-  exp.nTrainingTrials = 3;
-  exp.nTestTrials = 2;
+  exp.nTrainingTrials = 20;
+  exp.nTestTrials = 20;
   exp.receivedData = false;
 
   exp.trials = [];
