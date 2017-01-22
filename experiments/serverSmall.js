@@ -14,8 +14,8 @@ var exit_survey_url = configs.exit_survey_url
 // var bigN = nChains * nGenPerChain;
 
 //hard code in the above
-var nChains = 2
-var nGenPerChain = 4
+var nChains = 8
+var nGenPerChain = 6
 var bigN = nChains * nGenPerChain
 
 var getTimestamp = function(){
@@ -84,16 +84,17 @@ var main = function(db){
 		console.log('connection')
 		socket.emit('workerID request')
 		socket.on('request data', function(workerID){
-			console.log('workerID', workerID)
+			var this_workerID = workerID
+			console.log('this_workerID', this_workerID)
 			chain_collection.find().toArray(function(err, docs){
 				if(err){
 					console.log('err', err)
 				}else{
-					if(docs.length == 0){
+					if(docs.length < nChains/2){
 						var condition = 'language'
 						var new_chain = {
 							gen: 1,
-							chain: 1,
+							chain: docs.length + 1,
 							genInProgress: true,
 							chainInProgress: true,
 							workerID: workerID,
@@ -107,11 +108,11 @@ var main = function(db){
 								socket.emit('assignment', {condition: condition, data: [], gen: 1, chain: 1})
 							}
 						})
-					}else if(docs.length == 1){
+					}else if(docs.length >= nChains/2 && docs.length < nChains){
 						var condition = 'data_incidental'
 						var new_chain = {
 							gen: 1,
-							chain: 2,
+							chain: docs.length + 1,
 							genInProgress: true,
 							chainInProgress: true,
 							workerID: workerID,
@@ -271,6 +272,52 @@ var main = function(db){
 					console.log("error updating chain collection doc", err)
 				}else{
 					console.log("Changed %d doc(s)...", numChanged)
+				}
+			})
+		})
+
+		socket.on('disconnect', function(){
+			chain_collection.find({workerID: this_workerID}).toArray(function(err, results){
+				if(err){
+					console.log('err', err)
+				}else{
+					worker_doc = results[0]
+					if(worker_doc.genInProgress){
+						if(worker_doc.condition == 'language'){
+							language_collection.deleteMany({workerID: this_workerID}, function(err, results){
+								if(err){
+									console.log('err', err)
+								}
+							})
+						}
+						data_collection.deleteMany({workerID: this_workerID}, function(err, results){
+							if(err){
+								console.log('err', err)
+							}
+						})
+						chain_collection.deleteOne(worker_doc, function(err, results){
+							if(err){
+								console.log('err')
+							}else{
+								console.log('unexpected disconnection, deleted chain info from worker')
+							}
+						})
+						var temp_chain = {
+							gen: worker_doc.gen - 1,
+							chain: worker_doc.chain,
+							genInProgress: false,
+							chainInProgress: true,
+							workerID: 'temp',
+							condition: worker_doc.condition
+						}
+						chain_collection.insertOne(temp_chain, function(err, results){
+							if(err){
+								console.log('err', err)
+							}else{
+								console.log('inserted temp')
+							}
+						})
+					}
 				}
 			})
 		})
