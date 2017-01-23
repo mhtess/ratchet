@@ -73,7 +73,7 @@ function make_slides(f) {
         exp.condition = assignment_packet.condition
         exp.gen = assignment_packet.gen
         exp.chain = assignment_packet.chain
-        if(assignment_packet.data.length == 0 || exp.condition == 'language'){  
+        if(assignment_packet.data.length == 0 || exp.condition == 'language'){
           //if we're the firs gen, we won't receive anything so we generate new things
           //additionally, if we're in language condition, we sample randomly from the true fn
           exp.training_stims = _.range(0, exp.nTrainingTrials).map(
@@ -100,10 +100,14 @@ function make_slides(f) {
     name : "instructions",
     start: function() {
       $(".language_instructions").hide();
+      $(".language_instructions_1").hide();
       $(".trainingTrials").html(exp.training_stims.length);
       $(".testTrials").html(exp.test_stims.length);
-      if(exp.condition == 'language' && exp.gen != 1){
+      if(exp.condition == 'language'){
         $(".language_instructions").show();
+      }
+      if(exp.condition == 'language' && exp.gen != 1){
+        $(".language_instructions_1").show();
       }
     },
     button : function() {
@@ -129,7 +133,7 @@ function make_slides(f) {
       $(".err").hide()
 
       if(exp.condition == 'language'){
-        $("#messageElicitation").html('In the box below, please describe what you believe is the relation between the size of the bug and the height on tree where it lives. This message will be shared with the next participant in order to help them learn. <textarea id="message" rows="2" cols="50"></textarea>');
+        $("#messageElicitation").html('In the box below, please describe what you believe is the relation between the size of the bug and the height on tree where it lives. This message will be shared with the next participant in order to help them learn. Remember your bonus will be determined by how well the next participant does. <textarea id="message" rows="2" cols="50"></textarea>');
       }
     },
     button : function() {
@@ -187,7 +191,7 @@ function make_slides(f) {
       "<div id='vslider1_train' class='vertical_slider'>|</div></td>"
 
       $("#sliders_train").append(bugsAndTrees);
-    
+
       $("#slider_col1_train").hide();
       var scale = 1;
 
