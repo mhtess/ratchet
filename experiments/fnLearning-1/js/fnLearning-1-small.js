@@ -174,8 +174,6 @@ function make_slides(f) {
         verticalQuestion = "Different sized bugs live at different heights on the tree.<br> For this bug on the left, how high on the tree does it live?"
       }
 
-
-
       $(".vertical_question").html(verticalQuestion);
       $("#sliders_train").empty();
 
@@ -254,6 +252,7 @@ function make_slides(f) {
         "true_output" : this.stim.y,
         "response" : exp.sliderPost[0]
       });
+      socket.emit('training', {gen: exp.gen, chain: exp.chain, stimulus: this.stim.x, response: exp.sliderPost[0], workerID: param('workerId'), condition: exp.condition})
     },
   });
 
@@ -364,8 +363,8 @@ function make_slides(f) {
 
 /// init ///
 function init() {
-  exp.nTrainingTrials = 20;
-  exp.nTestTrials = 20;
+  exp.nTrainingTrials = 1;
+  exp.nTestTrials = 1;
   exp.receivedData = false;
 
   exp.trials = [];

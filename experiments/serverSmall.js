@@ -14,8 +14,8 @@ var exit_survey_url = configs.exit_survey_url
 // var bigN = nChains * nGenPerChain;
 
 //hard code in the above
-var nChains = 2
-var nGenPerChain = 4
+var nChains = 4
+var nGenPerChain = 6
 var bigN = nChains * nGenPerChain
 
 var getTimestamp = function(){
@@ -44,7 +44,7 @@ try {
 
 var mongodb = require('mongodb')
 var MongoClient = mongodb.MongoClient
-var url = 'mongodb://superAdmin:admin123@localhost:27018/test?authSource=admin';
+var url = 'mongodb://superAdmin:admin123@localhost:27017/test?authSource=admin';
 var db
 MongoClient.connect(url, function(err, database){
 	if(err){
@@ -52,228 +52,330 @@ MongoClient.connect(url, function(err, database){
 	}else{
 		console.log("Connection established to", url)
 		db = database
-		main(db)
-	}
-})	
+		server.listen(4343)
+		console.log("listening on port 4343")
+		var chain_collection = db.collection('chains')
+		var data_collection = db.collection('data')
+		var language_collection = db.collection('language')
+		var training_collection = db.collection('training')
+		
+		app.use(express.static(__dirname));
 
-var main = function(db){
-	server.listen(4343)
-	console.log("listening on port 4343")
-	var chain_collection = db.collection('chains')
-	var data_collection = db.collection('data')
-	var language_collection = db.collection('language')
-	
-	app.use(express.static(__dirname));
+		app.get(/^(.+)$/, function(req, res){
+		     console.log('static file request : ' + req.params);
+		     console.log("ACCESS: " + req.params[0])
+		     res.sendFile(__dirname + req.params[0])
+		 });
 
-	app.get(/^(.+)$/, function(req, res){
-	     console.log('static file request : ' + req.params);
-	     console.log("ACCESS: " + req.params[0])
-	     res.sendFile(__dirname + req.params[0])
-	 });
+		var fnnsp = io.of('/function-nsp')
+		//the plan...
+		//we are running only two chains right now - one for language, one for data.
+		//on connection, we assign to language or data_incidental chain
+		//then, depending on the chain we send relevant information
+		//	* NB if they're the first generation, we send nothing (this is docs.length == 0 || docs.length == 1 below)
+		//we receive data, and store as normal (below as socket.on('data', function(trial_data){}))
+		//we don't have to worry about anyone waiting because the HITs are posted 2 at a time --> always an opening
 
-	var fnnsp = io.of('/function-nsp')
-	//the plan...
-	//we are running only two chains right now - one for language, one for data.
-	//on connection, we assign to language or data_incidental chain
-	//then, depending on the chain we send relevant information
-	//	* NB if they're the first generation, we send nothing (this is docs.length == 0 || docs.length == 1 below)
-	//we receive data, and store as normal (below as socket.on('data', function(trial_data){}))
-	//we don't have to worry about anyone waiting because the HITs are posted 2 at a time --> always an opening
-
-	fnnsp.on('connection', function(socket){
-		console.log('connection')
-		socket.emit('workerID request')
-		socket.on('request data', function(workerID){
-			console.log('workerID', workerID)
-			chain_collection.find().toArray(function(err, docs){
-				if(err){
-					console.log('err', err)
-				}else{
-					if(docs.length == 0){
-						var condition = 'language'
-						var new_chain = {
-							gen: 1,
-							chain: 1,
-							genInProgress: true,
-							chainInProgress: true,
-							workerID: workerID,
-							condition: condition
-						}
-						chain_collection.insertOne(new_chain, function(err, res){
-							if(err){
-								console.log('err', err)
-							}else{
-								console.log('emitting data for new')
-								socket.emit('assignment', {condition: condition, data: [], gen: 1, chain: 1})
-							}
-						})
-					}else if(docs.length == 1){
-						var condition = 'data_incidental'
-						var new_chain = {
-							gen: 1,
-							chain: 2,
-							genInProgress: true,
-							chainInProgress: true,
-							workerID: workerID,
-							condition: condition
-						}
-						chain_collection.insertOne(new_chain, function(err, res){
-							if(err){
-								console.log('err', err)
-							}else{
-								console.log('emitting data for two')
-								socket.emit('assignment', {condition: condition, data: [], gen: 1, chain: 2})
-							}
-						})
+		fnnsp.on('connection', function(socket){
+			console.log('connection')
+			socket.emit('workerID request')
+			var this_workerID;
+			var started = false;
+			var finished = false;
+			socket.on('request data', function(workerID){
+				this_workerID = workerID
+				started = true
+				console.log('workerID:', this_workerID)
+				//we need to check if there's a chain with generation==0 and genInProgress==false
+				//if such a chain exists, then we assign this worker to that chain
+				//if not, then we check the number of chains that have been assigned so far
+				//if it's less than nChains, we assign as necessary
+				//if it's equal to nChains, then we assign to minGen's chain
+				chain_collection.find().sort({'gen':1}).toArray(function(err, results){
+					//check if there's no results
+					//if there are results, check if the first doc's gen is 0
+					if(err){
+						console.log('err', err)
 					}else{
-						chain_collection.find({'genInProgress': false, 'chainInProgress': true}).sort({'gen':1}).limit(1).toArray(function(err, docs){
-							if(err){
-								console.log('err', err)
-							}else{
-								console.log(docs.length)
-								console.log('found it')
-								console.log(docs[0])
-								var minGen = docs[0]
-								var condition = minGen.condition //we use this later to send data
+						if(results.length > 0){
+							var min_gen_doc = results[0]
+							if(min_gen_doc.gen == 0){
+								//assign to that chain
+								var condition = min_gen_doc.condition
+								var chain = min_gen_doc.chain
 								var new_chain = {
-									gen: minGen.gen + 1,
-									chain: minGen.chain,
+									gen: 1,
+									chain: chain,
 									genInProgress: true,
-									chainInProgress: minGen.chainInProgress,
-									workerID: workerID,
+									chainInProgress: true,
+									workerID: this_workerID,
 									condition: condition
 								}
-								//insert the new chain, delete the old one
 								chain_collection.insertOne(new_chain, function(err, res){
 									if(err){
-										console.log("err", err)
+										console.log('err', err)
 									}else{
-										console.log('inserted new chain into chains')
-										if(condition == 'language'){
-											console.log('searching for language from chain', minGen.chain)
-											console.log('and generation', minGen.gen)
-											language_collection.find({gen: minGen.gen, chain: minGen.chain}).toArray(function(err, results){
-												if(err){
-													console.log('err', err)
-												}else{
-													console.log('results.length:', results.length)
-													console.log('message:', results[0].message)
-													console.log('message doc:')
-													console.log(results[0])
-													console.log('emitting language for user', results[0].message)
-													socket.emit('assignment', {condition: condition, data: results[0].message, gen: minGen.gen + 1, chain: minGen.chain})
-													deleteMinGen(minGen)
-												}
-											})
+										//delete min_gen_doc from the chains collection
+										console.log('inserted into aborted chain...')
+										chain_collection.deleteOne(min_gen_doc, function(err, res){
+											if(err){
+												console.log('err', err)
+											}else{
+												console.log('deleted aborted chain doc')
+												socket.emit('assignment', {condition: condition, data: [], gen: 1, chain: chain})
+											}
+										})
+									}
+								})
+							}else{
+								//if we don't have the full number of chains yet, but there's no abandoned spots
+								if(results.length < nChains){
+									if(results.length < nChains/2){
+										var condition = 'language'
+										var new_chain = {
+											gen: 1,
+											chain: results.length + 1,
+											genInProgress: true,
+											chainInProgress: true,
+											workerID: workerID,
+											condition: condition
+										}
+										chain_collection.insertOne(new_chain, function(err, res){
+											if(err){
+												console.log('err', err)
+											}else{
+												console.log('emitting data for new')
+												socket.emit('assignment', {condition: condition, data: [], gen: 1, chain: results.length + 1})
+											}
+										})
+									}else{
+										var condition = 'data_incidental'
+										var new_chain = {
+											gen: 1,
+											chain: results.length + 1,
+											genInProgress: true,
+											chainInProgress: true,
+											workerID: workerID,
+											condition: condition
+										}
+										chain_collection.insertOne(new_chain, function(err, res){
+											if(err){
+												console.log('err', err)
+											}else{
+												console.log('emitting data for two')
+												socket.emit('assignment', {condition: condition, data: [], gen: 1, chain: results.length + 1})
+											}
+										})
+									}
+								}else{
+									var condition = min_gen_doc.condition
+									var new_chain = {
+										gen: min_gen_doc.gen + 1,
+										chain: min_gen_doc.chain,
+										genInProgress: true,
+										chainInProgress: true,
+										workerID: workerID,
+										condition: condition
+									}
+									chain_collection.insertOne(new_chain, function(err, res){
+										if(err){
+											console.log('err', err)
 										}else{
-											data_collection.find({gen: minGen.gen, chain: minGen.chain}, function(err, cursor){
-												if(err){
-													console.log("error querying data", err)
-												}else{
-													cursor.toArray(function(err, results){
-														//change results to required data
+											console.log('inserted new chain into chains')
+											if(condition == 'language'){
+												//get the language data
+												console.log('searching for language for chain', min_gen_doc.chain)
+												console.log('gen', min_gen_doc.gen)
+												language_collection.find({gen: min_gen_doc.gen, chain: min_gen_doc.chain}).toArray(function(err, results){
+													if(err){
+														console.log('err', err)
+													}else{
+														console.log('emitting data with language:', results[0].message)
+														socket.emit('assignment', {condition: condition, data: results[0].message, gen: min_gen_doc.gen + 1, chain: min_gen_doc.chain})
+														deleteMinGen(min_gen_doc)
+													}
+												})
+											}else if(condition == 'data_incidental'){
+												//get the incidental data
+												data_collection.find({gen: min_gen_doc.gen, chain: min_gen_doc.chain}).toArray(function(err, results){
+													if(err){
+														console.log('err', err)
+													}else{
 														var data_to_send = results.map(function(this_doc){
 															var x = this_doc.stimulus
 															var y = this_doc.response
 															return {x, y}
 														})
-														console.log('emitting data for user, length', data_to_send.length)
-														socket.emit('assignment', {condition: condition, data: data_to_send, gen: minGen.gen + 1, chain: minGen.chain})
-														deleteMinGen(minGen)
-													})
-												}
-											})
+														console.log('emitting %d data points to user', data_to_send.length)
+														socket.emit('assignment', {condition: condition, data: data_to_send, gen: min_gen_doc.gen + 1, chain: min_gen_doc.chain})
+														deleteMinGen(min_gen_doc)
+													}
+												})
+											}
+											var deleteMinGen = function(min_gen_doc){
+												chain_collection.deleteOne(min_gen_doc, function(err, res){
+													if(err){
+														console.log('err', err)
+													}else{
+														console.log('deleted min_gen_doc (old chain document)')
+													}
+												})
+											}
 										}
-										//delete the old one
-										var deleteMinGen = function(minGen){
-											chain_collection.deleteOne(minGen, function(err, res){
-												if(err){
-													console.log("err", err)
-												}else{
-													console.log('deleted old chain')
-												}
-											})
-										}
+									})
+								}
+							}
+						}else{
+							var new_chain = {
+								gen: 1,
+								chain: 1,
+								genInProgress: true,
+								chainInProgress: true,
+								workerID: workerID,
+								condition: 'language'
+							}
+							chain_collection.insertOne(new_chain, function(err, res){
+								if(err){
+									console.log('err', err)
+								}else{
+									console.log('emitting data for first user')
+									socket.emit('assignment', {condition: 'language', data: [], gen: 1, chain: 1})
+								}
+							})
+						}
+					}
+				})
+			})			
 
+			socket.on('training', function(training_data){
+				console.log('received data')
+				var new_training_doc = {
+					gen: training_data.gen,
+					chain: training_data.chain,
+					stimulus: training_data.stimulus,
+					response: training_data.response,
+					workerID: training_data.workerID,
+					condition: training_data.condition
+				}
+				training_collection.insertOne(new_training_doc, function(err, results){
+					if(err){
+						console.log('err', err)
+					}else{
+						console.log('stored training trial from worker:', training_data.workerID)
+					}
+				})
+			})
+
+			socket.on('data', function(trial_data){
+				console.log('received data')
+				var new_data_doc = {
+					gen: trial_data.gen,
+					chain: trial_data.chain,
+					stimulus: trial_data.stimulus,
+					response: trial_data.response,
+					workerID: trial_data.workerID,
+					condition: trial_data.condition
+				}
+				data_collection.insertOne(new_data_doc, function(err, results){
+					if(err){
+						console.log('err', err)
+					}else{
+						console.log('stored test trial from worker:', trial_data.workerID)
+					}
+				})
+			})
+
+			socket.on('language', function(language_data){
+				var new_language_doc = {
+					gen: language_data.gen,
+					chain: language_data.chain,
+					message: language_data.message,
+					workerID: language_data.workerId
+				}
+				language_collection.insertOne(new_language_doc, function(err, results){
+					if(err){
+						console.log('err', err)
+					}else{
+						console.log('inserted language doc from worker:', language_data.workerID)
+						console.log('message:', language_data.message)
+					}
+				})
+			})
+
+			//receive when a worker completes their experiment - we can set the genInProgress var for their chain to false
+			socket.on('complete', function(workerID){
+				finished = true;
+				chain_collection.update({workerID: workerID}, {$set: {genInProgress: false}}, function(err, numChanged){
+					if(err){
+						console.log("error updating chain collection doc", err)
+					}else{
+						console.log("Changed %d doc(s)...", numChanged)
+					}
+				})
+			})
+
+			socket.on('disconnect', function(){
+				//delete the relevant documents from this user if they started the experiment but did not finish it
+				if(started && !finished){
+					console.log('searching for:', this_workerID)
+					chain_collection.find({workerID: this_workerID}).toArray(function(err, results){
+						if(err){
+							console.log('err', err)
+						}else{
+							console.log("results")
+							console.log(results)
+							worker_doc = results[0]
+							console.log('worker_doc:')
+							console.log(worker_doc)
+							if(worker_doc.genInProgress){
+								if(worker_doc.condition == 'language'){
+									language_collection.deleteMany({workerID: this_workerID}, function(err, results){
+										if(err){
+											console.log('err', err)
+										}
+									})
+								}
+								data_collection.deleteMany({workerID: this_workerID}, function(err, results){
+									if(err){
+										console.log('err', err)
+									}else{
+										console.log('unexpected disconnection, deleted trial data from worker')
+									}
+								})
+								training_collection.deleteMany({workerID: this_workerID}, function(err, results){
+									if(err){
+										console.log('err', err)
+									}else{
+										console.log('unexpected disconnection, deleted training data from worker')
+									}
+								})
+								chain_collection.deleteOne(worker_doc, function(err, results){
+									if(err){
+										console.log('err')
+									}else{
+										console.log('unexpected disconnection, deleted chain info from worker')
+									}
+								})
+								var temp_chain = {
+									gen: worker_doc.gen - 1,
+									chain: worker_doc.chain,
+									genInProgress: false,
+									chainInProgress: true,
+									workerID: 'temp',
+									condition: worker_doc.condition
+								}
+								chain_collection.insertOne(temp_chain, function(err, results){
+									if(err){
+										console.log('err', err)
+									}else{
+										console.log('inserted temp')
 									}
 								})
 							}
-						})
-					}
-				}
-			})
-		})
-
-		socket.on('data', function(trial_data){
-			console.log('received data')
-			//get gen and chain info etc
-			//{stimulus: this.stim.x, response: exp.sliderPost[0], workerID: param('workerID'), condition: exp.condition}
-			// var trial = ??
-			var stimulus = trial_data.stimulus
-			var response = trial_data.response
-			var workerID = trial_data.workerID
-			var condition = trial_data.condition
-			//we need condition, gen, chain
-			chain_collection.find({workerID: workerID}, function(err, cursor){
-				if(err){
-					console.log("err", err)
-				}else{
-					cursor.toArray(function(err, results){
-						if(err){
-							console.log("err", err)
-						}else{
-							var doc = results[0]
-							var gen = doc.gen
-							var chain = doc.chain
-							var new_data_doc = {
-								gen: gen,
-								chain: chain,
-								// trial: trial,
-								stimulus: stimulus,
-								response: response,
-								workerID: workerID,
-								condition: condition
-							}
-							data_collection.insertOne(new_data_doc, function(err, results){
-								if(err){
-									console.log("err", err)
-								}else{
-									console.log('stored data trial from worker:', workerID)
-								}
-							})
 						}
 					})
 				}
 			})
 		})
-
-		socket.on('language', function(language_data){
-			var new_language_doc = {
-				gen: language_data.gen,
-				chain: language_data.chain,
-				message: language_data.message,
-				workerID: language_data.workerId
-			}
-			language_collection.insertOne(new_language_doc, function(err, results){
-				if(err){
-					console.log('err', err)
-				}else{
-					console.log('inserted language doc from worker:', language_data.workerID)
-					console.log('message:', language_data.message)
-				}
-			})
-		})
-
-		//receive when a worker completes their experiment - we can set the genInProgress var for their chain to false
-		socket.on('complete', function(workerID){
-			chain_collection.update({workerID: workerID}, {$set: {genInProgress: false}}, function(err, numChanged){
-				if(err){
-					console.log("error updating chain collection doc", err)
-				}else{
-					console.log("Changed %d doc(s)...", numChanged)
-				}
-			})
-		})
-	})
-
-}
+	}
+})
