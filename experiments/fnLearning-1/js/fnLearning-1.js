@@ -1,14 +1,4 @@
-
-// the following is commented to run locally:
-// var socket = io('/experiment-nsp');
-
-// HERE, WE GET DATA FROM THE LAST PARTICIPANT IN CHAIN
-// WE NEED TO THINK ABOUT WHAT TO DO IF THIS IS DATA PTS VS. LANGUAGE
-
-// socket.on('dataPass', function(dataToPass){
-// 	console.log("dataPass callback");
-// 	exp.training_stims = dataToPass;
-// });
+var socket = io('/function-nsp');
 
 function param( param ) {
     param = param.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
@@ -16,7 +6,6 @@ function param( param ) {
     var regex = new RegExp( regexS );
     var tmpURL = window.location.href
     var results = regex.exec( tmpURL );
-    console.log("param: " + param + ", URL: " + tmpURL)
     if( results == null ) {
         return "";
     } else {
@@ -27,7 +16,8 @@ function param( param ) {
 var functionsToLearn = {
   "y=1-x": function(x){return 1 - x},
   "y=x" : function(x){ return x},
-  "y=sin(x)": function(x){ return Math.sin(x*Math.PI)}
+  "y=sin(x)": function(x){ return Math.sin(x*Math.PI)},
+  "beppu": function(x){ return 4*Math.pow(x-0.5, 2)}
 };
 
 var makeDataPoint = function(fn){
@@ -35,11 +25,6 @@ var makeDataPoint = function(fn){
   var y = fn(x);
   return {x, y}
 };
-
-socket.on('workerID request', function(){
-  socket.emit('workerID', param("workerID"))
-})
-
 var color ="#316C0B";
 
 var bugProps = {
@@ -65,14 +50,17 @@ var treeProps =  {
   "col3":{"mean":color}
 }
 
+socket.on('workerID request', function(){
+  socket.emit('workerID', param("workerId"))
+})
+
 function make_slides(f) {
   var slides = {};
 
   slides.i0 = slide({
      name : "i0",
      start: function() {
-       $("#timeMinutes").html(Math.round(
-       (exp.training_stims.length + exp.test_stims.length) / 6))
+        $("#timeMinutes").html('10')
       exp.startT = Date.now();
      }
   });
@@ -80,23 +68,29 @@ function make_slides(f) {
   slides.lobby = slide({
     name: "lobby",
     start: function(){
-      socket.emit('request data', param('workerID'))
+      socket.emit('request data', param('workerId'))
       socket.on('assignment', function(assignment_packet){
         exp.condition = assignment_packet.condition
-        if(assignment_packet.data == [] || exp.condition == 'language'){  
+        exp.gen = assignment_packet.gen
+        exp.chain = assignment_packet.chain
+        if(assignment_packet.data.length == 0 || exp.condition == 'language'){
           //if we're the firs gen, we won't receive anything so we generate new things
           //additionally, if we're in language condition, we sample randomly from the true fn
           exp.training_stims = _.range(0, exp.nTrainingTrials).map(
             function(x){ return makeDataPoint(functionsToLearn[exp.targetFn]) }
           )
-          if(exp.condition == 'language'){
-            exp.structure[2] = 'language_instructions' //use the language instructions slide instead of the regular instructions slide
-            exp.posteriorMessage = assignment_packet.data[0]
+          if(exp.condition == 'language' && exp.gen != 1){
+            // exp.structure[2] = 'language_instructions' //use the language instructions slide instead of the regular instructions slide
+            exp.posteriorMessage = assignment_packet.data
           }
         }else{
           //otherwise, we're in the data_incidental condition and use the given data
           exp.training_stims = assignment_packet.data
         }
+        slides.fn_learning_train.present = exp.training_stims
+        console.log('condition', exp.condition)
+        console.log('generation', exp.gen)
+        console.log('chain', exp.chain)
         exp.go()
       })
     }
@@ -105,25 +99,21 @@ function make_slides(f) {
   slides.instructions = slide({
     name : "instructions",
     start: function() {
+      $(".language_instructions").hide();
+      $(".language_instructions_1").hide();
       $(".trainingTrials").html(exp.training_stims.length);
       $(".testTrials").html(exp.test_stims.length);
+      if(exp.condition == 'language'){
+        $(".language_instructions").show();
+      }
+      if(exp.condition == 'language' && exp.gen != 1){
+        $(".language_instructions_1").show();
+      }
     },
     button : function() {
       exp.go(); //use exp.go() if and only if there is no "present" data.
     }
   });
-
-  slides.language_instructions = slide({
-    name : "language_instructions",
-    start: function() {
-      $(".trainingTrials").html(exp.training_stims.length);
-      $(".testTrials").html(exp.test_stims.length);
-    },
-    button : function() {
-      exp.go(); //use exp.go() if and only if there is no "present" data.
-    }
-  });
-
 
   slides.intermediate_instructions = slide({
     name : "intermediate_instructions",
@@ -140,18 +130,30 @@ function make_slides(f) {
     start: function() {
       $(".trainingTrials").html(exp.training_stims.length);
       $(".testTrials").html(exp.test_stims.length);
+      $(".err").hide()
 
-      exp.condition == "language" ?
-      $("#messageElicitation").html('In the box below, please describe what you believe is the relation between the size of the bug and the height on tree where it lives. This message will be shared with the next participant in order to help them learn. <textarea id="message" rows="2" cols="50"></textarea>');
-
+      if(exp.condition == 'language'){
+        $("#messageElicitation").html('In the box below, please describe what you believe is the relation between the size of the bug and the height on tree where it lives. This message will be shared with the next participant in order to help them learn. Remember your bonus will be determined by how well the next participant does. <textarea id="message" rows="2" cols="50"></textarea>');
+      }
     },
     button : function() {
       // TODO: SAVE MESSAGE THAT IS PASSED
-      exp.go();
+      console.log('sending message data')
+      if(exp.condition == 'language'){
+        var message = $("#message").val()
+        if(message == ''){
+          $(".err").show()
+        }else{
+          var workerID = param('workerId')
+          console.log("workerID", workerID)
+          socket.emit('language', {workerId: param('workerId'), message: message, gen: exp.gen, chain: exp.chain})
+          exp.go()
+        }
+      }else{
+        exp.go()
+      }
     }
   });
-
-
   slides.fn_learning_train = slide({
     name : "fn_learning_train",
     present : _.shuffle(exp.training_stims),
@@ -172,8 +174,6 @@ function make_slides(f) {
         verticalQuestion = "Different sized bugs live at different heights on the tree.<br> For this bug on the left, how high on the tree does it live?"
       }
 
-
-
       $(".vertical_question").html(verticalQuestion);
       $("#sliders_train").empty();
 
@@ -189,7 +189,7 @@ function make_slides(f) {
       "<div id='vslider1_train' class='vertical_slider'>|</div></td>"
 
       $("#sliders_train").append(bugsAndTrees);
-    
+
       $("#slider_col1_train").hide();
       var scale = 1;
 
@@ -252,6 +252,7 @@ function make_slides(f) {
         "true_output" : this.stim.y,
         "response" : exp.sliderPost[0]
       });
+      socket.emit('training', {gen: exp.gen, chain: exp.chain, stimulus: this.stim.x, response: exp.sliderPost[0], workerID: param('workerId'), condition: exp.condition})
     },
   });
 
@@ -271,10 +272,9 @@ function make_slides(f) {
       } else {
         verticalQuestion = "Different sized bugs live at different heights on the tree.<br> For this bug on the left, how high on the tree does it live?"
       }
+      $(".vetical_question").html(verticalQuestion)
 
       $(".sliders").empty();
-
-
 
       $(".sliders").append("<td><svg id='svg_bug'></svg></td><td id='blank'></td>");
       $(".sliders").append("<td><svg id='svg_tree'></svg></td>");
@@ -318,6 +318,7 @@ function make_slides(f) {
         "true_output" : this.stim.y,
         "response" : exp.sliderPost[0]
       });
+      socket.emit('data', {gen: exp.gen, chain: exp.chain, stimulus: this.stim.x, response: exp.sliderPost[0], workerID: param('workerId'), condition: exp.condition})
     },
   });
 
@@ -328,7 +329,7 @@ function make_slides(f) {
       exp.subj_data = {
         language : $("#language").val(),
         enjoyment : $("#enjoyment").val(),
-        asses : $('input[name="assess"]:checked').val(),
+        assess : $('input[name="assess"]:checked').val(),
         age : $("#age").val(),
         gender : $("#gender").val(),
         education : $("#education").val(),
@@ -344,6 +345,7 @@ function make_slides(f) {
   slides.thanks = slide({
     name : "thanks",
     start : function() {
+      socket.emit('complete', param('workerId')) //tell the server that this generation is no longer in progress
       exp.data= {
           "trials" : exp.data_trials,
           "catch_trials" : exp.catch_trials,
@@ -361,15 +363,16 @@ function make_slides(f) {
 
 /// init ///
 function init() {
-  exp.nTrainingTrials = 3;
-  exp.nTestTrials = 2;
+  exp.nTrainingTrials = 1;
+  exp.nTestTrials = 1;
   exp.receivedData = false;
 
   exp.trials = [];
   exp.catch_trials = [];
 
   // exp.targetFn = _.sample(["y=1-x", "y=x", "y=sin(x)"])
-  exp.targetFn = "y=1-x";
+  // exp.targetFn = "y=1-x";
+  exp.targetFn = "beppu"
 
   // n random selected x-values
 
@@ -379,6 +382,8 @@ function init() {
        return makeDataPoint(functionsToLearn[exp.targetFn])
     }
   )
+
+  exp.training_stims = []
 
   // could also do n equally spaced x-values
   // that is more like pedagogical sampling

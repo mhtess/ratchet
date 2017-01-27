@@ -1,3 +1,9 @@
+var getTimestamp = function(){
+	var date = moment().format().slice(0, 10)
+	var time = moment().format().slice(11, 19)
+	return date + ' ' + time
+}
+
 var express = require('express'),
  		app = express(),
  		fs = require('fs'),
@@ -5,19 +11,7 @@ var express = require('express'),
  		moment = require('moment');
 
 vm.runInThisContext(fs.readFileSync(__dirname + '/config.js'))
-// var use_db = configs.use_db
-var time_to_play = configs.play_time
-var exit_survey_url = configs.exit_survey_url
-
-var nChains = config.nChains; // number of chains
-var nGenPerChain = config.nGenPerChain; // number of gens in a chain
-var bigN = nChains * nGenPerChain;
-
-var getTimestamp = function(){
-	var date = moment().format().slice(0, 10)
-	var time = moment().format().slice(11, 19)
-	return date + ' ' + time
-}
+var nChains = configs.nChains
 
 try {
 	var
@@ -37,258 +31,344 @@ try {
 		 io = require('socket.io').listen(server)
 }
 
-var queueOfWorkers = []
-
-// DATABASE INFORMATION
-
-// chains collection contains documents that look like:
-// {gen: 4, chain: 2, genInProgress: false, chainInProgress: true, workerid: workerid, condition: condition, startTime: time}
-
-// messages collection
-// might want to make different collections for different conditions (e.g., language vs. data passing)
-// {gen: 4, chain: 2, message: "as the bugs get bigger, the trees get smaller", workerid: workerid, condition: "language"}
-// {gen: 4, chain: 2, message: [{stimulus: 0.34, response: 0.76}, ... ], workerid: workerid, condition: "data_incidental"}
-
-// data collection (for discrete time experiments)
-// consult nathaniel's mysql code for ideas for continuous time expts
-// {gen: 4, chain: 2, trial: 14, stimulus: 0.34, response: 0.76, feedback: false, workerid: workerid, condition: condition}
-
 var mongodb = require('mongodb')
 var MongoClient = mongodb.MongoClient
-var url = 'mongodb://superAdmin:admin123@localhost:27017/mydb?'
+var url = configs.mongo_url
 var db
+
 MongoClient.connect(url, function(err, database){
 	if(err){
 		console.log("Error connecting to mongoDB server: ", err)
 	}else{
 		console.log("Connection established to", url)
 		db = database
-		main(db)
-	}
-})	
+		server.listen(4343)
+		console.log("listening on port 4343")
+		var chain_collection = db.collection('chains')
+		var data_collection = db.collection('data')
+		var language_collection = db.collection('language')
+		var training_collection = db.collection('training')
+		
+		app.use(express.static(__dirname));
 
-var main = function(db){
-	app.listen(3000)
-	console.log("listening on port 3000")
-	var chain_collection = db.collection('chains')
-	var data_collection = db.collection('data')
-	var language_collection = db.collection('language')
-	
-	app.use(express.static(__dirname));
+		app.get(/^(.+)$/, function(req, res){
+		     console.log('static file request : ' + req.params);
+		     console.log("ACCESS: " + req.params[0])
+		     res.sendFile(__dirname + req.params[0])
+		 });
 
-	app.get(/^(.+)$/, function(req, res){
-	     console.log('static file request : ' + req.params);
-	     console.log("ACCESS: " + req.params[0])
-	     res.sendFile(__dirname + req.params[0])
-	 });
+		var fnnsp = io.of('/function-nsp')
 
-
-	var fnnsp = io.of('/function-nsp')
-	fnnsp.on('connection', function(socket){
-		socket.on('data request', function(workerID){
-			//things to do on connection
-			//	* assign condition
-			//	* assign chain and generation
-
-			// for max chain val
-			//newestChain:
-			var assignCondition = function(socket, workerID){
-				chain_collection.find().toArray(function(err, docs){
-				assert.equal(null, err)
-				var newestChain = docs.sort({chain:-1}).limit(1)
-				var nextChain = newestChain.chain + 1
-				var outOfChains = (newestChain == nChains) //this is true if the chain we just pulled is the nth chain
-				chain_collection.aggregate(
-					{"$match": {'genInProgress': false, 'chainInProgress': true} },
-					{"$group": {_id: "$chain", maxGen: { "$max": "$gen"}} },
-					function(err, results){
-						assert.equal(null, err)
-						var nextGens = results
-						var participantMustWait = (!nextGens && outOfChains) //need to figure out what to do with this....
-						//longestRunningGen:
-						chain_collection.aggregate(
-							{"$match": {'chainInProgress': true, 'genInProgress': true} },
-							{"$group": {_id: "$chain", time: { "$max": "$startTime" } } },
-							function(err, res){
-								assert.equal(null, err)
-								var longestRunningGen = res
-								//the rest of the chain assignment logic should be able to go in here...
-
-								// CHAIN ASSINGNMENT LOGIC
-								// if nextGens exists, we assign the incoming participant to the chain closest to completion
-								// could imagine other schemes (e.g., the chain furthest from completion);
-
-								// if nextGens DOESNT exist (if there are no chains in progress that have a ready slot):
-								// then make a new chain (if we can)
-								// otherwise, assign the participant to the chain that's been running the longest
-								// in this case, they would have to wait, so we emit the previous gen's data/language when ready
-
-								var lastGenInChain = nextGens ? _.max(nextGens, "gen") :
-											outOfChains ? longestRunningGen :
-											-1;
-
-								var chain = nextGens ? lastGenInChain.chain :
-													outOfChains ? longestRunningGen.chain :
-													nextChain;
-
-								// is this the last generation in the chain
-								var chainInProgress = lastGenInChain.gen + 1 < nGenPerChain;
-
-								var condition = nextGens ? lastGenInChain.condition :
-													outOfChains ? longestRunningGen.condition :
-													'undefined';
-								//if condition is not predetermined, we determine it by balancing
-								if(!participantMustWait){
-									if(condition == 'undefined'){
-										chain_collection.aggregate(
-											{"$match": {'condition': 'language'} },
-											{"$group": {_id: "$chain", num_chains: { $sum: 1}} },
-											function(err, results){
-												if(err){
-													console.log("Error matching for condition 'language':", err)
-												}else{
-													var language_count = results.length
-													chain_collection.aggregate(
-													[
-														{
-															"$match":
-																{'condition': 'data_incidental'}
-														},
-														{
-															"$group":
-																{_id: "$chain", num_chains: { $sum: 1}}
-														}
-													], function(err, results){
-														if(err){
-															console.log("Error for matching condition 'data_incidental':", err)
-														}else{
-															var data_incidental_count = results.length
-															if(language_count > data_incidental_count){
-																condition = 'data_incidental'
-															}else{
-																condition = 'language'
-															}
-														}
-													})
-												}
-											}
-										)
-									}
-
-									// chains collection contains documents that look like:
-									// {gen: 4, chain: 2, genInProgress: false, chainInProgress: true, workerid: workerid, condition: condition, startTime: time}
-
-									//we need to get the workerID from the client, then store it in this chain and assign the client its condition/give it data
-									//we wait for the worker to get to the "lobby" slide, at which point the client emits a data request
-									var new_chain = {
-										gen: (lastGenInChain == -1) ? 0 : lastGenInChain.gen + 1,
-										chain: chain,
-										genInProgress: true,
-										chainInProgress: chainInProgress,
-										workerid: workerID,
-										condition: condition,
-										startTime: getTimestamp()
-									}
-									chain_collection.insert(new_chain, function(err, results){
-										if(err){
-											console.log("Error inserting new worker:", err)
-										}else{
-											console.log("Inserted new worker", workerID)
-											//send along data/language to new worker if they're not the 0th in their chain
-											if (lastGenInChain != -1){
-												if(condition == 'language'){
-													//get the language, send it along
-													language_collection.find({gen: lastGenInChain.gen, chain: chain}, function(err, cursor){
-														if(err){
-															console.log("error querying language from previous gen:", err)
-														}else{
-															cursor.toArray(function(err, results){
-																//debugging pro strats: this should be length one or we've got duplicates in the db for messages from chain & gen
-																assert.equal(1, results.length)
-																socket.emit('assignment', {condition: condition, data: results[0].message})
-															})
-														}
-													})
-													socket.emit('assignment', {condition: condition, data: language_to_pass})
-												}else if(condition == 'data_incidental'){
-													data_collection.aggregate(
-														{"$match": {chain: chain, generation: lastGenInChain.gen} },
-														{"$group": },
-														function(err, results){
-															if(err){
-																console.log("error collecting previous data:", err)
-															}else{
-																//turn results into a collection of x, ys
-																// {gen: 4, chain: 2, trial: 14, stimulus: 0.34, response: 0.76, feedback: false, workerid: workerid, condition: condition}
-																var data_to_pass = results.map(function(doc){
-																	return {doc.stimulus, doc.response} //{x, y} == {stimulus (bug size), response (slider height)}
-																})
-																socket.emit('assignment', {condition: condition, data: data_to_pass})
-															}
-														}
-													)
-												}
+		//on connection, we assign the worker to a specific chain, and pass along any necessary data
+		//the first generation of a chain receives no data
+		fnnsp.on('connection', function(socket){
+			console.log('connection')
+			socket.emit('workerID request')
+			var this_workerID;
+			var started = false;
+			var finished = false;
+			socket.on('request data', function(workerID){
+				this_workerID = workerID
+				started = true
+				console.log('workerID:', this_workerID)
+				//we need to check if there's a chain with generation==0 and genInProgress==false
+				//if such a chain exists (the root of a chain which was abandoned), then we 
+				//assign this worker to that chain
+				//if not, then we check the number of chains that have been assigned so far
+				//if it's less than nChains, we assign to a new chain as necessary
+				//if it's equal to nChains, then we assign the chain with minimum generation number
+				chain_collection.find().sort({'gen':1}).toArray(function(err, results){
+					//check if there's no results
+					//if there are results, check if the first doc's gen is 0
+					if(err){
+						console.log('err', err)
+					}else{
+						if(results.length > 0){
+							var min_gen_doc = results[0] //document of chain with minimum generation
+							if(min_gen_doc.gen == 0){
+								//assign to that chain
+								var condition = min_gen_doc.condition
+								var chain = min_gen_doc.chain
+								var new_chain = {
+									gen: 1,
+									chain: chain,
+									genInProgress: true,
+									chainInProgress: true,
+									workerID: this_workerID,
+									condition: condition
+								}
+								chain_collection.insertOne(new_chain, function(err, res){
+									if(err){
+										console.log('err', err)
+									}else{
+										//delete min_gen_doc from the chains collection
+										console.log('inserted into abandoned chain...')
+										chain_collection.deleteOne(min_gen_doc, function(err, res){
+											if(err){
+												console.log('err', err)
 											}else{
-												//new in chain? generate random data from true function, happens on client side when data list is empty
-												socket.emit('assignment', {condition: condition, data: []})
+												console.log('deleted abandoned chain doc')
+												socket.emit('assignment', {condition: condition, data: [], gen: 1, chain: chain})
+											}
+										})
+									}
+								})
+							}else{
+								//if we don't have the full number of chains yet, but there's no abandoned first generations
+								if(results.length < nChains){
+									//first half of chains are language
+									if(results.length < nChains/2){
+										var condition = 'language'
+										var new_chain = {
+											gen: 1,
+											chain: results.length + 1,
+											genInProgress: true,
+											chainInProgress: true,
+											workerID: workerID,
+											condition: condition
+										}
+										chain_collection.insertOne(new_chain, function(err, res){
+											if(err){
+												console.log('err', err)
+											}else{
+												console.log('emitting data for new')
+												socket.emit('assignment', {condition: condition, data: [], gen: 1, chain: results.length + 1})
+											}
+										})
+									}else{
+										//second half of chains are data_incidental
+										var condition = 'data_incidental'
+										var new_chain = {
+											gen: 1,
+											chain: results.length + 1,
+											genInProgress: true,
+											chainInProgress: true,
+											workerID: workerID,
+											condition: condition
+										}
+										chain_collection.insertOne(new_chain, function(err, res){
+											if(err){
+												console.log('err', err)
+											}else{
+												console.log('emitting data for two')
+												socket.emit('assignment', {condition: condition, data: [], gen: 1, chain: results.length + 1})
+											}
+										})
+									}
+								}else{
+									//we have nChains chains running already, so we must start assigning workers to existing chains
+									var condition = min_gen_doc.condition
+									var new_chain = {
+										gen: min_gen_doc.gen + 1,
+										chain: min_gen_doc.chain,
+										genInProgress: true,
+										chainInProgress: true,
+										workerID: workerID,
+										condition: condition
+									}
+									chain_collection.insertOne(new_chain, function(err, res){
+										if(err){
+											console.log('err', err)
+										}else{
+											console.log('inserted new chain into chains')
+											if(condition == 'language'){
+												//get the language data
+												console.log('searching for language for chain', min_gen_doc.chain)
+												console.log('gen', min_gen_doc.gen)
+												language_collection.find({gen: min_gen_doc.gen, chain: min_gen_doc.chain}).toArray(function(err, results){
+													if(err){
+														console.log('err', err)
+													}else{
+														console.log('emitting data with language:', results[0].message)
+														socket.emit('assignment', {condition: condition, data: results[0].message, gen: min_gen_doc.gen + 1, chain: min_gen_doc.chain})
+														deleteMinGen(min_gen_doc)
+													}
+												})
+											}else if(condition == 'data_incidental'){
+												//get the incidental data
+												data_collection.find({gen: min_gen_doc.gen, chain: min_gen_doc.chain}).toArray(function(err, results){
+													if(err){
+														console.log('err', err)
+													}else{
+														var data_to_send = results.map(function(this_doc){
+															var x = this_doc.stimulus
+															var y = this_doc.response
+															return {x, y}
+														})
+														console.log('emitting %d data points to user', data_to_send.length)
+														socket.emit('assignment', {condition: condition, data: data_to_send, gen: min_gen_doc.gen + 1, chain: min_gen_doc.chain})
+														deleteMinGen(min_gen_doc)
+													}
+												})
+											}
+											var deleteMinGen = function(min_gen_doc){
+												chain_collection.deleteOne(min_gen_doc, function(err, res){
+													if(err){
+														console.log('err', err)
+													}else{
+														console.log('deleted min_gen_doc (old chain document)')
+													}
+												})
 											}
 										}
 									})
-								}else{
-									//we have to wait for something to be complete....
-									//idea: we keep a queue of people who are waiting, have clients emit "finished" events
-									//when we receive a "finished" event, we assign the next person in the queue
-									queueOfWorkers.append(socket)
 								}
 							}
-						)
+						}else{
+							//very first worker
+							var new_chain = {
+								gen: 1,
+								chain: 1,
+								genInProgress: true,
+								chainInProgress: true,
+								workerID: workerID,
+								condition: 'language'
+							}
+							chain_collection.insertOne(new_chain, function(err, res){
+								if(err){
+									console.log('err', err)
+								}else{
+									console.log('emitting data for first user')
+									socket.emit('assignment', {condition: 'language', data: [], gen: 1, chain: 1})
+								}
+							})
+						}
 					}
-				)
-			}
-			assignCondition(socket, workerID)		
-		})
-		//^^ double check that these all match...
+				})
+			})			
 
-		socket.on('data', function(trial_data){
-			//handle trial data by putting in db
-			//have the trial data packaged on client side
-			data_collection.insert(trial_data, function(err, result){
-				if(err){
-					console.log("Error:", err)
-				}else{
-					console.log("Inserted %d documents into data collection", result.length)
+			//receive and store data from the training rounds
+			socket.on('training', function(training_data){
+				console.log('received data')
+				var new_training_doc = {
+					gen: training_data.gen,
+					chain: training_data.chain,
+					stimulus: training_data.stimulus,
+					response: training_data.response,
+					workerID: training_data.workerID,
+					condition: training_data.condition
+				}
+				training_collection.insertOne(new_training_doc, function(err, results){
+					if(err){
+						console.log('err', err)
+					}else{
+						console.log('stored training trial from worker:', training_data.workerID)
+					}
+				})
+			})
+
+			//receive and store data from the testing rounds
+			socket.on('data', function(trial_data){
+				console.log('received data')
+				var new_data_doc = {
+					gen: trial_data.gen,
+					chain: trial_data.chain,
+					stimulus: trial_data.stimulus,
+					response: trial_data.response,
+					workerID: trial_data.workerID,
+					condition: trial_data.condition
+				}
+				data_collection.insertOne(new_data_doc, function(err, results){
+					if(err){
+						console.log('err', err)
+					}else{
+						console.log('stored test trial from worker:', trial_data.workerID)
+					}
+				})
+			})
+
+			//receive and store language provided during debrief
+			socket.on('language', function(language_data){
+				var new_language_doc = {
+					gen: language_data.gen,
+					chain: language_data.chain,
+					message: language_data.message,
+					workerID: language_data.workerId
+				}
+				language_collection.insertOne(new_language_doc, function(err, results){
+					if(err){
+						console.log('err', err)
+					}else{
+						console.log('inserted language doc from worker:', language_data.workerID)
+						console.log('message:', language_data.message)
+					}
+				})
+			})
+
+			//receive when a worker completes their experiment - we can set the genInProgress var for their chain to false
+			socket.on('complete', function(workerID){
+				finished = true;
+				chain_collection.update({workerID: workerID}, {$set: {genInProgress: false}}, function(err, numChanged){
+					if(err){
+						console.log("error updating chain collection doc", err)
+					}else{
+						console.log("Changed %d doc(s)...", numChanged)
+					}
+				})
+			})
+
+			socket.on('disconnect', function(){
+				//delete the relevant documents from this user if they started the experiment but did not finish it
+				if(started && !finished){
+					console.log('searching for:', this_workerID)
+					chain_collection.find({workerID: this_workerID}).toArray(function(err, results){
+						if(err){
+							console.log('err', err)
+						}else{
+							console.log("results")
+							console.log(results)
+							worker_doc = results[0]
+							console.log('worker_doc:')
+							console.log(worker_doc)
+							if(worker_doc.genInProgress){
+								if(worker_doc.condition == 'language'){
+									language_collection.deleteMany({workerID: this_workerID}, function(err, results){
+										if(err){
+											console.log('err', err)
+										}
+									})
+								}
+								data_collection.deleteMany({workerID: this_workerID}, function(err, results){
+									if(err){
+										console.log('err', err)
+									}else{
+										console.log('unexpected disconnection, deleted trial data from worker')
+									}
+								})
+								training_collection.deleteMany({workerID: this_workerID}, function(err, results){
+									if(err){
+										console.log('err', err)
+									}else{
+										console.log('unexpected disconnection, deleted training data from worker')
+									}
+								})
+								chain_collection.deleteOne(worker_doc, function(err, results){
+									if(err){
+										console.log('err')
+									}else{
+										console.log('unexpected disconnection, deleted chain info from worker')
+									}
+								})
+								var temp_chain = {
+									gen: worker_doc.gen - 1,
+									chain: worker_doc.chain,
+									genInProgress: false,
+									chainInProgress: true,
+									workerID: 'temp',
+									condition: worker_doc.condition
+								}
+								chain_collection.insertOne(temp_chain, function(err, results){
+									if(err){
+										console.log('err', err)
+									}else{
+										console.log('inserted temp')
+									}
+								})
+							}
+						}
+					})
 				}
 			})
 		})
-
-		socket.on('language', function(language_data){
-			//again, have language_data packaged on client side
-			language_collection.insert(language_data, function(err, result){
-				if(err){
-					console.log("Error:", err)
-				}else{
-					console.log("Inserted %d documents", result.length)
-				}
-			})
-		})
-
-		//this is kind of hacky -- essentialy queueOfWorkers is a queue of sockets, and we always take the first socket,
-		//query the workerID, and then call assignCondition on the socket (stored as nextParticipant) with the received
-		//workerID
-		socket.on('complete', function(){
-			//go to queueOfWorkers and take the first socket, assign it to a condition
-			var nextParticipant = queueOfWorkers.shift() //this is a socket object
-			nextParticipant.emit('workerID request')
-			nextParticipant.on('workerID', function(workerID){
-				assignCondition(nextParticipant, workerID)
-			})
-		})
-	})
-
-	server.listen(port, function(){
-		console.log("Server listening port " + port + ".")
-		if(use_db){
-			console.log("Logging results in mongo database.")
-		}
-	})
-}
+	}
+})
