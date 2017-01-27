@@ -42,8 +42,8 @@ MongoClient.connect(url, function(err, database){
 	}else{
 		console.log("Connection established to", url)
 		db = database
-		server.listen(4343)
-		console.log("listening on port 4343")
+		server.listen(port)
+		console.log("listening on port", port)
 		var chain_collection = db.collection('chains')
 		var data_collection = db.collection('data')
 		var language_collection = db.collection('language')
